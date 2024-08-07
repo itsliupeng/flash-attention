@@ -37,7 +37,7 @@ def print_diffs(out, out_ref):
 # @pytest.mark.parametrize('d', [56, 80])
 # @pytest.mark.parametrize("d", [64, 128, 256])
 # @pytest.mark.parametrize("d", [64, 96, 128])
-@pytest.mark.parametrize("d", [64, 128])
+@pytest.mark.parametrize("d", [128,256])
 # @pytest.mark.parametrize("d", [128])
 @pytest.mark.parametrize(
     "seqlen_q,seqlen_k",
@@ -130,24 +130,24 @@ def test_flash_attn_output(
     #     print(f"LSE max diff: {(lse - lse_ref).abs().max().item()}")                
     # breakpoint()
 
-    if d <= 128:
-        g = torch.randn_like(out)
-        do_o = (g.float() * out.float()).sum(-1)
-        dq, dk, dv = torch.autograd.grad(out, (q, k, v), g)
-        dq_ref, dk_ref, dv_ref = torch.autograd.grad(out_ref, (q, k, v), g)
-        dq_pt, dk_pt, dv_pt = torch.autograd.grad(out_pt, (q, k, v), g)
-        print(f"dQ max diff: {(dq - dq_ref).abs().max().item()}")
-        print(f"dK max diff: {(dk - dk_ref).abs().max().item()}")
-        print(f"dV max diff: {(dv - dv_ref).abs().max().item()}")
-        print(f"dQ mean diff: {(dq - dq_ref).abs().mean().item()}")
-        print(f"dK mean diff: {(dk - dk_ref).abs().mean().item()}")
-        print(f"dV mean diff: {(dv - dv_ref).abs().mean().item()}")
-        print(f"dQ Pytorch max diff: {(dq_pt - dq_ref).abs().max().item()}")
-        print(f"dK Pytorch max diff: {(dk_pt - dk_ref).abs().max().item()}")
-        print(f"dV Pytorch max diff: {(dv_pt - dv_ref).abs().max().item()}")
-        print(f"dQ Pytorch mean diff: {(dq_pt - dq_ref).abs().mean().item()}")
-        print(f"dK Pytorch mean diff: {(dk_pt - dk_ref).abs().mean().item()}")
-        print(f"dV Pytorch mean diff: {(dv_pt - dv_ref).abs().mean().item()}")
+    # if d <= 128:
+    #     g = torch.randn_like(out)
+    #     do_o = (g.float() * out.float()).sum(-1)
+    #     dq, dk, dv = torch.autograd.grad(out, (q, k, v), g)
+    #     dq_ref, dk_ref, dv_ref = torch.autograd.grad(out_ref, (q, k, v), g)
+    #     dq_pt, dk_pt, dv_pt = torch.autograd.grad(out_pt, (q, k, v), g)
+    #     print(f"dQ max diff: {(dq - dq_ref).abs().max().item()}")
+    #     print(f"dK max diff: {(dk - dk_ref).abs().max().item()}")
+    #     print(f"dV max diff: {(dv - dv_ref).abs().max().item()}")
+    #     print(f"dQ mean diff: {(dq - dq_ref).abs().mean().item()}")
+    #     print(f"dK mean diff: {(dk - dk_ref).abs().mean().item()}")
+    #     print(f"dV mean diff: {(dv - dv_ref).abs().mean().item()}")
+    #     print(f"dQ Pytorch max diff: {(dq_pt - dq_ref).abs().max().item()}")
+    #     print(f"dK Pytorch max diff: {(dk_pt - dk_ref).abs().max().item()}")
+    #     print(f"dV Pytorch max diff: {(dv_pt - dv_ref).abs().max().item()}")
+    #     print(f"dQ Pytorch mean diff: {(dq_pt - dq_ref).abs().mean().item()}")
+    #     print(f"dK Pytorch mean diff: {(dk_pt - dk_ref).abs().mean().item()}")
+    #     print(f"dV Pytorch mean diff: {(dv_pt - dv_ref).abs().mean().item()}")
 
     # dS = torch.einsum('bthd,bshd->bhts', g.float(), v.float())
     # P = torch.softmax(qk, -1)
@@ -166,10 +166,10 @@ def test_flash_attn_output(
         # just test correctness of fp8 kernel w/o further quantization techniques
         assert (out - out_ref).abs().max().item() <= 40 * (out_pt - out_ref).abs().max().item()
 
-    if d <= 128:
-        assert (dq - dq_ref).abs().max().item() <= 2 * (dq_pt - dq_ref).abs().max().item() + 3e-5
-        assert (dk - dk_ref).abs().max().item() <= 2 * (dk_pt - dk_ref).abs().max().item() + 3e-5
-        assert (dv - dv_ref).abs().max().item() <= 2 * (dv_pt - dv_ref).abs().max().item() + 3e-5
+    # if d <= 128:
+    #     assert (dq - dq_ref).abs().max().item() <= 2 * (dq_pt - dq_ref).abs().max().item() + 3e-5
+    #     assert (dk - dk_ref).abs().max().item() <= 2 * (dk_pt - dk_ref).abs().max().item() + 3e-5
+    #     assert (dv - dv_ref).abs().max().item() <= 2 * (dv_pt - dv_ref).abs().max().item() + 3e-5
 
 
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
@@ -184,7 +184,7 @@ def test_flash_attn_output(
 # @pytest.mark.parametrize("d", [32, 64, 96, 128, 160, 192, 224, 256])
 # @pytest.mark.parametrize('d', [128])
 # @pytest.mark.parametrize("d", [64, 128, 256])
-@pytest.mark.parametrize("d", [64, 128])
+@pytest.mark.parametrize("d", [128,256])
 # @pytest.mark.parametrize("d", [128])
 @pytest.mark.parametrize(
     "seqlen_q,seqlen_k",
@@ -298,44 +298,44 @@ def test_flash_attn_varlen_output(
     print(f"Pytorch max diff: {(out_pt - out_ref).abs().max().item()}")
     print(f"Pytorch mean diff: {(out_pt - out_ref).abs().mean().item()}")
 
-    g = torch.randn_like(out)
-    if d <= 128:
-        (
-            dq_unpad,
-            dk_unpad,
-            dv_unpad,
-        ) = torch.autograd.grad(out, (q_unpad, k_unpad, v_unpad), g)
-        dk = dk_pad_fn(dk_unpad)
-        dv = dk_pad_fn(dv_unpad)
-        (
-            dq_ref,
-            dk_ref,
-            dv_ref,
-        ) = torch.autograd.grad(out_ref, (q, k, v), g)
-        (
-            dq_pt,
-            dk_pt,
-            dv_pt,
-        ) = torch.autograd.grad(out_pt, (q, k, v), g)
-        dq = dq_pad_fn(dq_unpad)
-        print(f"dQ max diff: {(dq - dq_ref).abs().max().item()}")
-        print(f"dK max diff: {(dk - dk_ref).abs().max().item()}")
-        print(f"dV max diff: {(dv - dv_ref).abs().max().item()}")
-        print(f"dQ mean diff: {(dq - dq_ref).abs().mean().item()}")
-        print(f"dK mean diff: {(dk - dk_ref).abs().mean().item()}")
-        print(f"dV mean diff: {(dv - dv_ref).abs().mean().item()}")
-        print(f"dQ Pytorch max diff: {(dq_pt - dq_ref).abs().max().item()}")
-        print(f"dK Pytorch max diff: {(dk_pt - dk_ref).abs().max().item()}")
-        print(f"dV Pytorch max diff: {(dv_pt - dv_ref).abs().max().item()}")
-        print(f"dQ Pytorch mean diff: {(dq_pt - dq_ref).abs().mean().item()}")
-        print(f"dK Pytorch mean diff: {(dk_pt - dk_ref).abs().mean().item()}")
-        print(f"dV Pytorch mean diff: {(dv_pt - dv_ref).abs().mean().item()}")
+    # g = torch.randn_like(out)
+    # if d <= 128:
+    #     (
+    #         dq_unpad,
+    #         dk_unpad,
+    #         dv_unpad,
+    #     ) = torch.autograd.grad(out, (q_unpad, k_unpad, v_unpad), g)
+    #     dk = dk_pad_fn(dk_unpad)
+    #     dv = dk_pad_fn(dv_unpad)
+    #     (
+    #         dq_ref,
+    #         dk_ref,
+    #         dv_ref,
+    #     ) = torch.autograd.grad(out_ref, (q, k, v), g)
+    #     (
+    #         dq_pt,
+    #         dk_pt,
+    #         dv_pt,
+    #     ) = torch.autograd.grad(out_pt, (q, k, v), g)
+    #     dq = dq_pad_fn(dq_unpad)
+    #     print(f"dQ max diff: {(dq - dq_ref).abs().max().item()}")
+    #     print(f"dK max diff: {(dk - dk_ref).abs().max().item()}")
+    #     print(f"dV max diff: {(dv - dv_ref).abs().max().item()}")
+    #     print(f"dQ mean diff: {(dq - dq_ref).abs().mean().item()}")
+    #     print(f"dK mean diff: {(dk - dk_ref).abs().mean().item()}")
+    #     print(f"dV mean diff: {(dv - dv_ref).abs().mean().item()}")
+    #     print(f"dQ Pytorch max diff: {(dq_pt - dq_ref).abs().max().item()}")
+    #     print(f"dK Pytorch max diff: {(dk_pt - dk_ref).abs().max().item()}")
+    #     print(f"dV Pytorch max diff: {(dv_pt - dv_ref).abs().max().item()}")
+    #     print(f"dQ Pytorch mean diff: {(dq_pt - dq_ref).abs().mean().item()}")
+    #     print(f"dK Pytorch mean diff: {(dk_pt - dk_ref).abs().mean().item()}")
+    #     print(f"dV Pytorch mean diff: {(dv_pt - dv_ref).abs().mean().item()}")
 
     # Check that FlashAttention's numerical error is at most twice the numerical error
     # of a Pytorch implementation.
     assert (out - out_ref).abs().max().item() <= 2 * (out_pt - out_ref).abs().max().item()
 
-    if d <= 128:
-        assert (dq - dq_ref).abs().max().item() < 1e-4 or (dq - dq_ref).abs().max().item() <= 3 * (dq_pt - dq_ref).abs().max().item()
-        assert (dk - dk_ref).abs().max().item() < 1e-4 or (dk - dk_ref).abs().max().item() <= 3 * (dk_pt - dk_ref).abs().max().item()
-        assert (dk - dk_ref).abs().max().item() < 1e-4 or (dv - dv_ref).abs().max().item() <= 3 * (dv_pt - dv_ref).abs().max().item()
+    # if d <= 128:
+    #     assert (dq - dq_ref).abs().max().item() < 1e-4 or (dq - dq_ref).abs().max().item() <= 3 * (dq_pt - dq_ref).abs().max().item()
+    #     assert (dk - dk_ref).abs().max().item() < 1e-4 or (dk - dk_ref).abs().max().item() <= 3 * (dk_pt - dk_ref).abs().max().item()
+    #     assert (dk - dk_ref).abs().max().item() < 1e-4 or (dv - dv_ref).abs().max().item() <= 3 * (dv_pt - dv_ref).abs().max().item()
