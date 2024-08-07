@@ -97,9 +97,9 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
     cudaGetDevice(&device);
     int multiprocessor_count;
     CHECK_CUDA(cudaDeviceGetAttribute(&multiprocessor_count, cudaDevAttrMultiProcessorCount, device));
-    dim3 grid_dims = Scheduler::get_grid_dim(scheduler_args, multiprocessor_count);
+    dim3 grid_dims = Scheduler::get_grid_dim(scheduler_args, multiprocessor_count); // (132, 1, 1)
     static constexpr int ctaSize = Kernel_traits::kNWarps * 32;
-    dim3 block_dims(ctaSize);
+    dim3 block_dims(ctaSize); // 384
     dim3 cluster_dims(size<0>(ClusterShape{}), size<1>(ClusterShape{}), size<2>(ClusterShape{}));
     cutlass::ClusterLaunchParams launch_params{grid_dims, block_dims, cluster_dims, smem_size, stream};
     cutlass::launch_kernel_on_cluster(
