@@ -153,6 +153,13 @@ void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split
     // HEADDIM_SWITCH(params.d, [&] {
     //     run_mha_fwd_<cutlass::half_t, kHeadSize>(params, stream);
     // });
+#ifdef C_DEBUG
+    if (params.d == 128) {
+        run_mha_fwd_<cutlass::half_t, 128>(params, stream);
+    } else {
+        run_mha_fwd_<cutlass::half_t, 256>(params, stream);
+    }
+#else
     if (!params.is_e4m3) {
         if (params.is_bf16) {
             if (params.d == 128) {
@@ -174,6 +181,7 @@ void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split
             run_mha_fwd_<cutlass::float_e4m3_t, 256>(params, stream);
         }        
     }
+#endif
 }
 
 std::vector<at::Tensor>
@@ -455,6 +463,7 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
     return {out, q_padded, k_padded, v_padded, out_padded, softmax_lse};
 }
 
+#ifndef C_DEBUG
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.doc() = "FlashAttention";
     m.def("fwd", &mha_fwd, "Forward pass");
@@ -462,3 +471,4 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("varlen_fwd", &mha_varlen_fwd, "Forward pass (variable length)");
     // m.def("varlen_bwd", &mha_varlen_bwd, "Varlen backward pass");
 }
+#endif
