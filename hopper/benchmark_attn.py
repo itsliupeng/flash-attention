@@ -192,9 +192,9 @@ dim = 2048
 # headdim = 64
 headdim = 256
 
-for mode in ['fwd', 'bwd']:
+for mode in ['fwd']:
 # for mode in ['bwd']:
-    for headdim in [64, 128, 256]:
+    for headdim in [128, 256]:
     # for headdim in [128]:
         for seqlen in [1024, 2048, 4096, 8192, 16384, 32768]:
         # for seqlen in [8192]:

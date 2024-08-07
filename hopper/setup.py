@@ -110,8 +110,8 @@ if not SKIP_CUDA_BUILD:
     cutlass_dir = repo_dir / "csrc" / "cutlass"
     sources = [
         "flash_api.cpp",
-        "flash_fwd_hdim64_fp16_sm90.cu",
-        "flash_fwd_hdim64_bf16_sm90.cu",
+        # "flash_fwd_hdim64_fp16_sm90.cu",
+        # "flash_fwd_hdim64_bf16_sm90.cu",
         "flash_fwd_hdim128_fp16_sm90.cu",
         "flash_fwd_hdim128_bf16_sm90.cu",
         "flash_fwd_hdim256_fp16_sm90.cu",
@@ -123,7 +123,7 @@ if not SKIP_CUDA_BUILD:
         # "flash_bwd_hdim64_bf16_sm90.cu",
         # "flash_bwd_hdim96_bf16_sm90.cu",
         # "flash_bwd_hdim128_bf16_sm90.cu",
-        "flash_fwd_hdim64_e4m3_sm90.cu",
+        # "flash_fwd_hdim64_e4m3_sm90.cu",
         "flash_fwd_hdim128_e4m3_sm90.cu",
         "flash_fwd_hdim256_e4m3_sm90.cu"
     ]
@@ -287,10 +287,10 @@ setup(
         "bdist_wheel": CachedWheelsCommand,
     },
     python_requires=">=3.8",
-    install_requires=[
-        "torch",
-        "einops",
-        "packaging",
-        "ninja",
-    ],
+    # install_requires=[
+    #     "torch",
+    #     "einops",
+    #     "packaging",
+    #     "ninja",
+    # ],
 )
