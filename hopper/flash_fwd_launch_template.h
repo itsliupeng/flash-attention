@@ -33,7 +33,7 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
         flash::SingleTileScheduler,
         std::conditional_t<!Is_causal,
             flash::StaticPersistentTileScheduler,
-            flash::DynamicPersistentTileScheduler<Kernel_traits::kNThreads - cutlass::NumThreadsPerWarpGroup, Kernel_traits::NumProducerThreads>
+            flash::DynamicPersistentTileScheduler<Kernel_traits::kNThreads - cutlass::NumThreadsPerWarpGroup, Kernel_traits::NumProducerThreads> // <12 * 32 - 128, 32>
     >>;
     // using Scheduler = flash::SingleTileScheduler;
     Seqlen_traits seqlen_traits_q(
@@ -59,6 +59,41 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
             ),  // layout_V
             params.scale_softmax_log2
         });
+#ifdef C_DEBUG
+	//  layout_Q: (128,256,16,8):(4096,_1,256,524288)
+	//  layout_K: (128,256,16,8):(4096,_1,256,524288)
+	//  layout_V: (128,256,16,8):(4096,_1,256,524288)
+	//  tma_load_Q: TiledCopy
+    //     Tiler_MN:       (_128,_256)
+    //     TiledLayout_TV: (_1,((_64,_128,_4))):(_0,((_128,_1,_8192)))
+    //     Copy_Atom
+    //     ThrID:        _1:_0
+    //     ValLayoutSrc: (_1,_8192):(_0,_1)
+    //     ValLayoutDst: (_1,_8192):(_0,_1)
+    //     ValLayoutRef: (_1,_8192):(_0,_1)
+    //     ValueType:    16b
+
+    // tma_load_K: TiledCopy
+    //     Tiler_MN:       (_80,_256)
+    //     TiledLayout_TV: (_1,((_64,_80,_4))):(_0,((_80,_1,_5120)))
+    //     Copy_Atom
+    //     ThrID:        _1:_0
+    //     ValLayoutSrc: (_1,_5120):(_0,_1)
+    //     ValLayoutDst: (_1,_5120):(_0,_1)
+    //     ValLayoutRef: (_1,_5120):(_0,_1)
+    //     ValueType:    16b
+
+    // tma_load_V: TiledCopy
+    //     Tiler_MN:       (_80,_256)
+    //     TiledLayout_TV: (_1,((_64,_80,_4))):(_0,((_80,_1,_5120)))
+    //     Copy_Atom
+    //     ThrID:        _1:_0
+    //     ValLayoutSrc: (_1,_5120):(_0,_1)
+    //     ValLayoutDst: (_1,_5120):(_0,_1)
+    //     ValLayoutRef: (_1,_5120):(_0,_1)
+    //     ValueType:    16b
+    mainloop_params.print();
+#endif
     typename CollectiveEpilogue::Params epilogue_params =
         CollectiveEpilogue::to_underlying_arguments({
             static_cast<OutputType*>(params.o_ptr),
@@ -84,11 +119,17 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
     else
         kernel = (void *)flash::compute_attn_ws<Kernel_traits, Is_causal, Scheduler, Seqlen_traits>;
     int smem_size = sizeof(typename Kernel_traits::SharedStorage);
-    // int smem_size_q = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_q));
-    // int smem_size_k = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_k));
-    // int smem_size_v = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_v));
-    // int smem_size_o = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_o));
-    // printf("smem_size = %d, q = %d, k = %d, v = %d, o = %d.\n", smem_size, smem_size_q, smem_size_k, smem_size_v, smem_size_o);
+#ifdef C_DEBUG
+    int smem_size_q = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_q));
+    int smem_size_k = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_k));
+    int smem_size_v = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_v));
+    int smem_size_o = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_o));
+    printf("smem_size = %d, q = %d, k = %d, v = %d, o = %d.\n", smem_size, smem_size_q, smem_size_k, smem_size_v, smem_size_o);
+    Kernel_traits kernel_traits;
+    kernel_traits.print();
+    Seqlen_traits seqlen_traits;
+    seqlen_traits.print();
+#endif
     if (smem_size >= 48 * 1024) {
        CHECK_CUDA(cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
     }

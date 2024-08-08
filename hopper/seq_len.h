@@ -55,6 +55,18 @@ public:
       int sum_s, int max_seq_len, int *cu_seq_len = nullptr, int *seq_used = nullptr): 
       sum_s(sum_s), cu_seq_len(cu_seq_len), seq_used(seq_used), actual_seq_len(max_seq_len) {}
 
+
+  void print() const {
+    std::cout << "in SeqLenTraits >>>>>" << std::endl;
+    cute::print("\t sum_s: "); cute::print(sum_s); cute::print("\n");
+    cute::print("\t cu_seq_len: "); cute::print(cu_seq_len); cute::print("\n");
+    cute::print("\t seq_used: "); cute::print(seq_used); cute::print("\n");
+    cute::print("\t actual_seq_len: "); cute::print(actual_seq_len); cute::print("\n");
+    cute::print("\t LayoutT: "); cute::print(LayoutT{}); cute::print("\n");
+    cute::print("\t LayoutLseT: "); cute::print(LayoutLseT{}); cute::print("\n");
+    std::cout << "<<<<< in SeqLenTraits" << std::endl;
+  }
+
   // Returns the layout of a tensor in MKHB format in global memory.
   // padded: only useful for var-seq-len for dq_accum and softmax_d.
   CUTLASS_HOST_DEVICE auto get_gmem_layout(

@@ -167,6 +167,16 @@ struct CollectiveMainloopFwd {
         TMA_K tma_load_K;
         TMA_V tma_load_V;
         float const softmax_scale_log2;
+        void print() const {
+            cute::print(">>>>> in CollectiveMainloopFwd#Params\n");
+            cute::print("\t layout_Q: "); cute::print(layout_Q); cute::print("\n"); // (128,256,16,8):(4096,_1,256,524288)
+            cute::print("\t layout_K: "); cute::print(layout_K); cute::print("\n"); // (128,256,16,8):(4096,_1,256,524288)
+            cute::print("\t layout_V: "); cute::print(layout_V); cute::print("\n"); // (128,256,16,8):(4096,_1,256,524288)
+            cute::print("\t tma_load_Q: "); cute::print(tma_load_Q); cute::print("\n");
+            cute::print("\t tma_load_K: "); cute::print(tma_load_K); cute::print("\n");
+            cute::print("\t tma_load_V: "); cute::print(tma_load_V); cute::print("\n");
+            cute::print("<<<<< in CollectiveMainloopFwd#Params\n");  
+        };
     };
 
 

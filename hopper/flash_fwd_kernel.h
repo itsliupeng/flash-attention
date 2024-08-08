@@ -41,8 +41,8 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
     static_assert(Ktraits::Is_WS);
     static constexpr bool Is_WS = Ktraits::Is_WS;
 
-    static constexpr int NumMmaThreads = size(typename Ktraits::TiledMma0{});
-    static constexpr int NumCopyThreads = !Is_WS ? 0 : cutlass::NumThreadsPerWarpGroup;
+    static constexpr int NumMmaThreads = size(typename Ktraits::TiledMma0{}); // 256 = 128 * 2
+    static constexpr int NumCopyThreads = !Is_WS ? 0 : cutlass::NumThreadsPerWarpGroup; // 128
     static constexpr int kBlockM = Ktraits::kBlockM;
     // static constexpr int kBlockN = Ktraits::kBlockN;
     // constexpr int kHeadDim = Ktraits::kHeadDim;
@@ -67,7 +67,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
     }
 
     // Obtain warp index
-    int const warp_group_thread_idx = threadIdx.x % cutlass::NumThreadsPerWarpGroup;
+    int const warp_group_thread_idx = threadIdx.x % cutlass::NumThreadsPerWarpGroup; // % 128
 
     PipelineParams pipeline_params;
     pipeline_params.transaction_bytes = CollectiveMainloop::TmaTransactionBytesK;
@@ -88,6 +88,13 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
 
     CollectiveMainloop collective_mainloop;
     CollectiveEpilogue collective_epilogue;
+
+#ifdef C_DEBUG
+    if (cute::thread0()) {
+        cute::print("\t NumMmaThreads: "); cute::print(NumMmaThreads); cute::print("\n");
+        cute::print("\t NumCopyThreads: "); cute::print(NumCopyThreads); print("\n");
+    }
+#endif
 
     // We need this to guarantee that the Pipeline init is visible to all producers and consumer blocks in the Cluster
     if constexpr (size(ClusterShape{}) > 1) {
@@ -111,8 +118,8 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
 
             TileScheduler scheduler(&shared_storage.tile_count_semaphore);
             for (auto work_tile_info = scheduler.get_initial_work();
-                 work_tile_info.is_valid(scheduler_params);
-                 work_tile_info = scheduler.template get_next_work</*IsProducer=*/true>(scheduler_params, work_tile_info)) {
+                work_tile_info.is_valid(scheduler_params);
+                work_tile_info = scheduler.template get_next_work</*IsProducer=*/true>(scheduler_params, work_tile_info)) {
                 auto block_coord = work_tile_info.get_block_coord(scheduler_params);
                 auto [m_block, bidh, bidb] = block_coord;
 

@@ -15,7 +15,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Debug build settings
 set(CMAKE_BUILD_TYPE Debug)
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_STREAM_DEBUG} -g")
+# set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_STREAM_DEBUG} -g")
 
 # CUDA options
 # Set CUDA standard
@@ -28,7 +28,7 @@ set(CMAKE_CUDA_ARCHITECTURES 90a)
 # set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -g -G --expt-relaxed-constexpr --use_fast_math -t 8")
 # set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O0 -g -G")
 # set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O0 -lineinfo --expt-relaxed-constexpr --use_fast_math -gencode arch=compute_90a,code=sm_90a")
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O0 -g -lineinfo --expt-relaxed-constexpr --use_fast_math -gencode arch=compute_90a,code=sm_90a")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O0 -g  -lineinfo --expt-relaxed-constexpr --use_fast_math -gencode arch=compute_90a,code=sm_90a")
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --ptxas-options=--verbose,--warn-on-local-memory-usage -Xnvlink=--verbose -Xptxas=--verbose")
 
 # Python settings

@@ -30,8 +30,8 @@ struct CollectiveEpilogueFwd {
     static constexpr int kNThreads = kNWarps * cutlass::NumThreadsPerWarp;
     static constexpr bool Is_WS = kNWarps >= 12;    
 
-    static constexpr int NumCopyThreads = !Is_WS ? 0 : cutlass::NumThreadsPerWarpGroup;
-    static constexpr int NumMmaThreads = kNThreads - NumCopyThreads;
+    static constexpr int NumCopyThreads = !Is_WS ? 0 : cutlass::NumThreadsPerWarpGroup; // 128
+    static constexpr int NumMmaThreads = kNThreads - NumCopyThreads; // 12 * 32 - 128
 
     using SmemLayoutAtomO = decltype(cutlass::gemm::collective::detail::ss_smem_selector<GMMA::Major::K, Element,
         decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
@@ -53,11 +53,11 @@ struct CollectiveEpilogueFwd {
         _1{}));  // no mcast for O
 
     // These are for storing the output tensor without TMA (e.g., for setting output to zero and var-seq-len)
-    static constexpr int kNumVecElem = ceil_div(128, sizeof_bits_v<Element>);
+    static constexpr int kNumVecElem = ceil_div(128, sizeof_bits_v<Element>); // 128 / 16 = 8
     static_assert(kHeadDim % kNumVecElem == 0);
-    static constexpr int kNumThreadsPerRow = kHeadDim / kNumVecElem;
-    static_assert(NumMmaThreads % kNumThreadsPerRow == 0);
-    static constexpr int kNumRows = NumMmaThreads / kNumThreadsPerRow;
+    static constexpr int kNumThreadsPerRow = kHeadDim / kNumVecElem; // 256 / 8
+    static_assert(NumMmaThreads % kNumThreadsPerRow == 0); // 
+    static constexpr int kNumRows = NumMmaThreads / kNumThreadsPerRow; // 
     using TiledCopyOAtom = cute::Copy_Atom<cute::UniversalCopy<cutlass::uint128_t>, Element>;
     using TiledCopyOThrLayout = decltype(cute::make_layout(
         cute::make_shape(Int<kNumRows>{}, Int<kNumThreadsPerRow>{}),
@@ -97,6 +97,12 @@ struct CollectiveEpilogueFwd {
         typename Seqlen_traits::LayoutLseT const layout_LSE;
         TMA_O tma_store_O;
     };
+
+    void print() const {
+        cute::print(">>>>> CollectiveEpilogueFwd\n");
+        cute::print("\t TileShape_MNK: "); cute::print(TileShape_MNK{}); cute::print("\n");
+        cute::print("<<<<< CollectiveEpilogueFwd\n");
+    }
 
     static Params
     to_underlying_arguments(Arguments const& args) {
