@@ -223,10 +223,10 @@ struct CollectiveMainloopFwd {
           const Seqlen_traits& seqlen_traits_q,
           const Seqlen_traits& seqlen_traits_k
         ) {
-        static constexpr int kBlockM = get<0>(TileShape_MNK{});
-        static constexpr int kBlockN = get<1>(TileShape_MNK{});        
+        static constexpr int kBlockM = get<0>(TileShape_MNK{}); // 128
+        static constexpr int kBlockN = get<1>(TileShape_MNK{}); // 80 
         int const seqlen_q = Seqlen_traits::kUseVarSeqLen ? seqlen_traits_q.actual_seq_len : shape<0>(mainloop_params.layout_Q);
-        int const seqlen_k = Seqlen_traits::kUseVarSeqLen ? seqlen_traits_k.actual_seq_len : shape<0>(mainloop_params.layout_K);        
+        int const seqlen_k = Seqlen_traits::kUseVarSeqLen ? seqlen_traits_k.actual_seq_len : shape<0>(mainloop_params.layout_K);       
         int n_block_max = cute::ceil_div(seqlen_k, kBlockN);
         if constexpr (Is_causal) {
             n_block_max = std::min(n_block_max,
@@ -688,7 +688,7 @@ struct CollectiveMainloopFwd {
         cutlass::ConsumerToken barrier_token = static_cast<cutlass::BarrierStatus>(shared_storage.barrier_Q.try_wait(work_idx % 2));
         if (barrier_token == cutlass::BarrierStatus::WaitAgain) { shared_storage.barrier_Q.wait(work_idx % 2); }
 
-        Tensor tSrS = partition_fragment_C(tiled_mma0, select<0, 1>(TileShape_MNK{}));
+        Tensor tSrS = partition_fragment_C(tiled_mma0, select<0, 1>(TileShape_MNK{})); // (M, N)
         consumer_wait(pipeline_k, smem_pipe_read_k);
         warp_scheduler_barrier_sync();
         flash::gemm</*zero_init=*/true, /*wg_wait=*/-1>(tiled_mma0, tSrQ, tSrK(_, _, _, smem_pipe_read_k.index()), tSrS);
@@ -705,7 +705,7 @@ struct CollectiveMainloopFwd {
             }
         }
         warpgroup_wait<0>();
-        pipeline_k.consumer_release(smem_pipe_read_k);
+        pipeline_k.consumer_release(smem_pipe_read_k); // PipelineState
         ++smem_pipe_read_k;
 
         auto col_limit_causal = [&](int row, int n_block) {
@@ -739,7 +739,6 @@ struct CollectiveMainloopFwd {
         // Only go through these if Is_causal, since n_masking_steps = 1 when !Is_causal
         #pragma unroll
         for (int masking_step = 0; masking_step < n_masking_steps - 1 && n_block > 0; ++masking_step, --n_block) {
-            Tensor tSrS = partition_fragment_C(tiled_mma0, select<0, 1>(TileShape_MNK{}));
             consumer_wait(pipeline_k, smem_pipe_read_k);
             warp_scheduler_barrier_sync();
             flash::gemm</*zero_init=*/true, /*wg_wait=*/-1>(tiled_mma0, tSrQ, tSrK(_, _, _, smem_pipe_read_k.index()), tSrS);
@@ -768,7 +767,6 @@ struct CollectiveMainloopFwd {
 
         #pragma unroll 1
         for (; n_block > 0; --n_block) {
-            Tensor tSrS = partition_fragment_C(tiled_mma0, select<0, 1>(TileShape_MNK{}));
             consumer_wait(pipeline_k, smem_pipe_read_k);
             warp_scheduler_barrier_sync();
             flash::gemm</*zero_init=*/true, /*wg_wait=*/-1>(tiled_mma0, tSrQ, tSrK(_, _, _, smem_pipe_read_k.index()), tSrS);
