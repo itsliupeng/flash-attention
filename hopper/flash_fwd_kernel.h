@@ -123,7 +123,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
                 auto block_coord = work_tile_info.get_block_coord(scheduler_params);
                 auto [m_block, bidh, bidb] = block_coord;
 
-                seqlen_traits_q.init(bidb);
+                seqlen_traits_q.init(bidb); // update actual_seq_len
                 seqlen_traits_k.init(bidb);
                 if (m_block * kBlockM >= seqlen_traits_q.actual_seq_len) {
                     continue;

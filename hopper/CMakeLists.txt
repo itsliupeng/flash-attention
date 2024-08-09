@@ -46,7 +46,8 @@ message(STATUS "TORCH_LIBRARIES: ${TORCH_LIBRARIES}")
 message(STATUS "TORCH_INCLUDE_DIRS: ${TORCH_INCLUDE_DIRS}")
 
 # Include directories
-set(CUTLASS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../csrc/cutlass)
+# set(CUTLASS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../csrc/cutlass)
+set(CUTLASS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cutlass)
 include_directories(
     ${CUTLASS_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}
