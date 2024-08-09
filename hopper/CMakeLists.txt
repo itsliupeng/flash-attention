@@ -61,6 +61,7 @@ add_definitions(-DFLASHATTENTION_DISABLE_DROPOUT)
 add_definitions(-DFLASHATTENTION_DISABLE_UNEVEN_K)
 add_definitions(-DFLASHATTENTION_DISABLE_LOCAL)
 add_definitions(-DC_DEBUG)
+add_definitions(-DLP_DEBUG)
 
 # Create a shared library
 set(FLASH_ATTN_CU
