@@ -258,7 +258,8 @@ struct CollectiveMainloopFwd {
 
         Tensor mQ = mainloop_params.tma_load_Q.get_tma_tensor(mainloop_params.layout_Q.shape());
         Tensor mK = mainloop_params.tma_load_K.get_tma_tensor(mainloop_params.layout_K.shape());
-        Tensor mV = mainloop_params.tma_load_V.get_tma_tensor(mainloop_params.layout_V.shape());
+        // Tensor mV = mainloop_params.tma_load_V.get_tma_tensor(mainloop_params.layout_V.shape());
+        Tensor mV = mK;
 
         auto [m_block, bidh, bidb] = block_coord;
         int bidh_kv = mainloop_params.qhead_per_khead_divmod.divide(bidh);
