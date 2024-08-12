@@ -329,19 +329,19 @@ struct CollectiveMainloopFwd {
                 copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write_k), mcast_mask_kv),
                     tKgK(_, n_block - 1), tKsK(_, smem_pipe_write_k.index()));
                 ++smem_pipe_write_k;
-                // pipeline_v.producer_acquire(smem_pipe_write_v);
-                // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write_v), mcast_mask_kv),
-                //     tVgV(_, n_block), tVsV(_, smem_pipe_write_v.index()));
-                // ++smem_pipe_write_v;
+                pipeline_v.producer_acquire(smem_pipe_write_v);
+                copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write_v), mcast_mask_kv),
+                    tVgV(_, n_block), tVsV(_, smem_pipe_write_v.index()));
+                ++smem_pipe_write_v;
             }
         }
         scheduler.prefetch_next_work(scheduler_params, work_tile_info);
-        // if (lane_predicate) {
-        //     pipeline_v.producer_acquire(smem_pipe_write_v);
-        //     copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write_v), mcast_mask_kv),
-        //         tVgV(_, n_block), tVsV(_, smem_pipe_write_v.index()));
-        //     ++smem_pipe_write_v;
-        // }
+        if (lane_predicate) {
+            pipeline_v.producer_acquire(smem_pipe_write_v);
+            copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write_v), mcast_mask_kv),
+                tVgV(_, n_block), tVsV(_, smem_pipe_write_v.index()));
+            ++smem_pipe_write_v;
+        }
         scheduler.broadcast_next_work(work_tile_info);
     }
 
@@ -751,7 +751,7 @@ struct CollectiveMainloopFwd {
             warp_scheduler_barrier_sync();
             flash::gemm</*zero_init=*/true, /*wg_wait=*/-1>(tiled_mma0, tSrQ, tSrK(_, _, _, smem_pipe_read_k.index()), tSrS);
             if (masking_step > 0) { softmax.rescale_o(tOrO, scores_scale); }
-            // consumer_wait(pipeline_v, smem_pipe_read_v);
+            consumer_wait(pipeline_v, smem_pipe_read_v);
             flash::gemm</*zero_init=*/false, /*wg_wait=*/-1>(tiled_mma1, tOrP, tOrV(_, _, _, smem_pipe_read_v.index()), tOrO);
             warp_scheduler_barrier_arrive();
             warpgroup_wait<1>();
@@ -767,9 +767,9 @@ struct CollectiveMainloopFwd {
             cute::copy(softmax.template max</*Is_first=*/false, /*Check_inf=*/true>(tSrS, mainloop_params.softmax_scale_log2), scores_scale);
             softmax.template online_softmax</*Is_first=*/false, /*Check_inf=*/true>(tSrS, mainloop_params.softmax_scale_log2);
             warpgroup_wait<0>();
-            // pipeline_v.consumer_release(smem_pipe_read_v);  // release V
+            pipeline_v.consumer_release(smem_pipe_read_v);  // release V
             ++smem_pipe_read_k;
-            // ++smem_pipe_read_v;
+            ++smem_pipe_read_v;
             cute::copy(make_tensor(convert_type<Element>(tSrS).data(), convert_layout_acc_Aregs<typename Ktraits::TiledMma1>(tSrS.layout())), tOrP);
         }
 
@@ -779,7 +779,7 @@ struct CollectiveMainloopFwd {
             warp_scheduler_barrier_sync();
             flash::gemm</*zero_init=*/true, /*wg_wait=*/-1>(tiled_mma0, tSrQ, tSrK(_, _, _, smem_pipe_read_k.index()), tSrS);
             softmax.rescale_o(tOrO, scores_scale);
-            // consumer_wait(pipeline_v, smem_pipe_read_v);
+            consumer_wait(pipeline_v, smem_pipe_read_v);
             flash::gemm</*zero_init=*/false, /*wg_wait=*/-1>(tiled_mma1, tOrP, tOrV(_, _, _, smem_pipe_read_v.index()), tOrO);
             warp_scheduler_barrier_arrive();
             warpgroup_wait<1>();
@@ -788,21 +788,21 @@ struct CollectiveMainloopFwd {
             cute::copy(softmax.template max</*Is_first=*/false>(tSrS, mainloop_params.softmax_scale_log2), scores_scale);
             softmax.template online_softmax</*Is_first=*/false>(tSrS, mainloop_params.softmax_scale_log2);
             warpgroup_wait<0>();
-            // pipeline_v.consumer_release(smem_pipe_read_v);  // release V
+            pipeline_v.consumer_release(smem_pipe_read_v);  // release V
             ++smem_pipe_read_k;
-            // ++smem_pipe_read_v;
+            ++smem_pipe_read_v;
             // softmax.rescale_o(tOrO, scores_scale);
             cute::copy(make_tensor(convert_type<Element>(tSrS).data(), convert_layout_acc_Aregs<typename Ktraits::TiledMma1>(tSrS.layout())), tOrP);
         }
         // Tell warp 0 that smem_q is ready
         cutlass::arch::NamedBarrier::arrive(NumMmaThreads + cutlass::NumThreadsPerWarp, static_cast<int>(FwdNamedBarriers::QueryEmpty) /*id*/);
         softmax.rescale_o(tOrO, scores_scale);
-        // consumer_wait(pipeline_v, smem_pipe_read_v);
+        consumer_wait(pipeline_v, smem_pipe_read_v);
         flash::gemm</*zero_init=*/false, /*wg_wait=*/-1>(tiled_mma1, tOrP, tOrV(_, _, _, smem_pipe_read_v.index()), tOrO);
         cute::copy(softmax.template finalize</*Check_inf=*/Is_causal>(tSrS, mainloop_params.softmax_scale_log2), scores_scale);
         warpgroup_wait<0>();
-        // pipeline_v.consumer_release(smem_pipe_read_v);  // release V, otherwise producers will hang
-        // ++smem_pipe_read_v;
+        pipeline_v.consumer_release(smem_pipe_read_v);  // release V, otherwise producers will hang
+        ++smem_pipe_read_v;
 
         softmax.rescale_o(tOrO, scores_scale);
         return;
