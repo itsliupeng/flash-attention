@@ -18,6 +18,8 @@
 #include "utils.h"
 
 
+constexpr static int Stages = 1;
+
 template<typename Kernel_traits, bool Is_causal, typename Seqlen_traits>
 void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
     using Element = typename Kernel_traits::Element;
@@ -155,7 +157,7 @@ void run_mha_fwd_hdim64(Flash_fwd_params &params, cudaStream_t stream) {
     BOOL_SWITCH(params.is_causal, Is_causal, [&] {
         SEQLEN_SWITCH(params.cu_seqlens_q, Seqlen_traits, [&] {
             run_flash_fwd<
-                Flash_fwd_kernel_traits<Headdim, 192, 128, 16, 2, false, 1, T>, 
+                Flash_fwd_kernel_traits<Headdim, 192, 128, 16, Stages, false, 1, T>, 
                 Is_causal, Seqlen_traits
             >(params, stream);
         });
@@ -170,7 +172,7 @@ void run_mha_fwd_hdim128(Flash_fwd_params &params, cudaStream_t stream) {
             // Only use Cluster if number of tiles along seqlen_q is even and not Is_causal
             BOOL_SWITCH(cutlass::ceil_div(params.seqlen_q, 128) % 2 == 0 && !Is_causal && !Seqlen_traits::kUseVarSeqLen, UseCluster, [&] {
                 run_flash_fwd<
-                    Flash_fwd_kernel_traits<Headdim, 128, Is_causal ? 128 : 176, 12, 2, false, UseCluster ? 2 : 1, T>, 
+                    Flash_fwd_kernel_traits<Headdim, 128, Is_causal ? 128 : 176, 12, Stages, false, UseCluster ? 2 : 1, T>, 
                     Is_causal, Seqlen_traits
                 >(params, stream);
             });
@@ -186,7 +188,7 @@ void run_mha_fwd_hdim256(Flash_fwd_params &params, cudaStream_t stream) {
             // Only use Cluster if number of tiles along seqlen_q is even
             BOOL_SWITCH(cutlass::ceil_div(params.seqlen_q, 128) % 2 == 0 && !Is_causal && !Seqlen_traits::kUseVarSeqLen, UseCluster, [&] {
                 run_flash_fwd<
-                    Flash_fwd_kernel_traits<Headdim, 128, 80, 12, 2, false, UseCluster ? 2 : 1, T>, 
+                    Flash_fwd_kernel_traits<Headdim, 128, 80, 12, Stages, false, UseCluster ? 2 : 1, T>, 
                     Is_causal, Seqlen_traits
                 >(params, stream);
             });
