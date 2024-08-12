@@ -6,6 +6,7 @@ from vllm_flash_attn.flash_attn_interface import flash_attn_func as vllm_flash_a
 # S = 128
 N = 32
 # H = 256
+# B, H, S = 8, 128, 128
 
 for S in [128, 512, 1024]:
     for H in [128, 256]:

@@ -111,7 +111,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
 
         int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
         if (warp_idx_in_warpgroup == 0) {  // Load Q, K, V
-            PipelineState smem_pipe_write_k = cutlass::make_producer_start_state<MainloopPipeline>();
+            PipelineState smem_pipe_write_k = cutlass::make_producer_start_state<MainloopPipeline>(); // (0, 1, 0)
             PipelineState smem_pipe_write_v = cutlass::make_producer_start_state<MainloopPipeline>();
 
             int work_idx = 0;
