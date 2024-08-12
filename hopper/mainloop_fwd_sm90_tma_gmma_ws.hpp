@@ -254,12 +254,12 @@ struct CollectiveMainloopFwd {
 
         Tensor sQ = make_tensor(make_smem_ptr(shared_storage.smem_q.data()), SmemLayoutQ{});
         // Tensor sK = make_tensor(make_smem_ptr(shared_storage.smem_k.data()), SmemLayoutK{});
-        Tensor sV = make_tensor(make_smem_ptr(shared_storage.smem_k.data()), SmemLayoutV{});
+        Tensor sV = make_tensor(make_smem_ptr(shared_storage.smem_v.data()), SmemLayoutV{});
         Tensor sK = sV;
 
         Tensor mQ = mainloop_params.tma_load_Q.get_tma_tensor(mainloop_params.layout_Q.shape());
         // Tensor mK = mainloop_params.tma_load_K.get_tma_tensor(mainloop_params.layout_K.shape());
-        Tensor mV = mainloop_params.tma_load_V.get_tma_tensor(mainloop_params.layout_K.shape());
+        Tensor mV = mainloop_params.tma_load_V.get_tma_tensor(mainloop_params.layout_V.shape());
         Tensor mK = mV;
 
         // print("mK: "); print(mK); print("\n");
@@ -667,9 +667,9 @@ struct CollectiveMainloopFwd {
 
         Tensor sQ = make_tensor(make_smem_ptr(shared_storage.smem_q.data()), SmemLayoutQ{});
         // Tensor sK = make_tensor(make_smem_ptr(shared_storage.smem_k.data()), SmemLayoutK{});
-        Tensor sV = make_tensor(make_smem_ptr(shared_storage.smem_k.data()), SmemLayoutV{});
+        Tensor sV = make_tensor(make_smem_ptr(shared_storage.smem_v.data()), SmemLayoutV{});
         Tensor sK = sV;
-        Tensor sVt = make_tensor(make_smem_ptr(shared_storage.smem_k.data()), SmemLayoutVt{});
+        Tensor sVt = make_tensor(make_smem_ptr(shared_storage.smem_v.data()), SmemLayoutVt{});
 
         typename Ktraits::TiledMma0 tiled_mma0;
         typename Ktraits::TiledMma1 tiled_mma1;
