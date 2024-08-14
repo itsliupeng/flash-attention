@@ -200,7 +200,7 @@ template<typename T>
 void run_mha_fwd_hdim64_fp8(Flash_fwd_params &params, cudaStream_t stream) {
     constexpr static int Headdim = 64;
     constexpr static int kBlockM = 192;
-    constexpr static int kBlockN = 256;
+    constexpr static int kBlockN = 128;
     constexpr static int kNWarps = 4 + kBlockM/16; // 16
     constexpr static int kStages = 4;    
     BOOL_SWITCH(params.is_causal, Is_causal, [&] {
@@ -219,7 +219,7 @@ template<typename T>
 void run_mha_fwd_hdim128_fp8(Flash_fwd_params &params, cudaStream_t stream) {
     constexpr static int Headdim = 128;
     constexpr static int kBlockM = 128;
-    constexpr static int kBlockN = 512;
+    constexpr static int kBlockN = 256;
     constexpr static int kNWarps = 4 + kBlockM/16; // 12
     constexpr static int kStages = 2;    
     BOOL_SWITCH(params.is_causal, Is_causal, [&] {
@@ -238,7 +238,7 @@ template<typename T>
 void run_mha_fwd_hdim256_fp8(Flash_fwd_params &params, cudaStream_t stream) {
     constexpr static int Headdim = 256; 
     constexpr static int kBlockM = 128;
-    constexpr static int kBlockN = 256;
+    constexpr static int kBlockN = 192;
     constexpr static int kNWarps = 4 + kBlockM/16; // 12
     constexpr static int kStages = 2;    
     BOOL_SWITCH(params.is_causal, Is_causal, [&] {
