@@ -276,7 +276,7 @@ struct Flash_fwd_kernel_traits_fp8 {
     // using BarrierType = typename MainloopPipeline::ProducerBarrierType;
 
     void print() const {
-        std::cout << "in Flash_fwd_kernel_traits >>>>>" << std::endl;
+        std::cout << "in Flash_fwd_kernel_traits_fp8 >>>>>" << std::endl;
         cute::print("\t kNWarps: "); cute::print(kNWarps); cute::print("\n");
         cute::print("\t kNThreads: "); cute::print(kNThreads); cute::print("\n");
         cute::print("\t NumProducerThreads: "); cute::print(NumProducerThreads); cute::print("\n");
@@ -294,7 +294,7 @@ struct Flash_fwd_kernel_traits_fp8 {
         cute::print("\t TiledMma0: "); cute::print(TiledMma0{}); cute::print("\n");
         cute::print("\t TiledMma1: "); cute::print(TiledMma1{}); cute::print("\n");
         // Continue for other fields as necessary...
-        std::cout << "<<<<< in Flash_fwd_kernel_traits" << std::endl;
+        std::cout << "<<<<< in Flash_fwd_kernel_traits_fp8" << std::endl;
     }
 };
 
