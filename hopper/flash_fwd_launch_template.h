@@ -18,7 +18,7 @@
 #include "utils.h"
 
 
-constexpr static int Stages = 1;
+constexpr static int Stages = 2;
 
 template<typename Kernel_traits, bool Is_causal, typename Seqlen_traits>
 void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {

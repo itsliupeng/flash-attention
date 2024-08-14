@@ -386,8 +386,9 @@ struct CollectiveMainloopFwd {
         };
 
         Tensor mQ = mainloop_params.tma_load_Q.get_tma_tensor(mainloop_params.layout_Q.shape());
-        Tensor mK = mainloop_params.tma_load_K.get_tma_tensor(mainloop_params.layout_K.shape());
+        // Tensor mK = mainloop_params.tma_load_K.get_tma_tensor(mainloop_params.layout_K.shape());
         Tensor mV = mainloop_params.tma_load_V.get_tma_tensor(mainloop_params.layout_V.shape());
+        Tensor mK = mV;
 
         auto [m_block, bidh, bidb] = block_coord;
         int bidh_kv = mainloop_params.qhead_per_khead_divmod.divide(bidh);
@@ -432,8 +433,8 @@ struct CollectiveMainloopFwd {
         }
 
         // Wait for the MMA warpgroups to say that smem_q is ready
-        // for fp8, change from NumThreadsPerWarp to NumThreadsPerWarpGroup
-        cutlass::arch::NamedBarrier::sync(NumMmaThreads + cutlass::NumThreadsPerWarpGroup, static_cast<int>(FwdNamedBarriers::QueryEmpty) /*id*/);
+        // for fp8, change from NumThreadsPerWarp to NumThreadsPerWarpGroup ??
+        cutlass::arch::NamedBarrier::sync(NumMmaThreads + cutlass::NumThreadsPerWarpGroup, static_cast<int>(FwdNamedBarriers::QueryEmpty) /*id*/); // 128 * 2 + 128
 
         if constexpr(Is_causal) {
             if (warp_idx_in_warpgroup == 0 && lane_predicate) {

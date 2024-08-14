@@ -154,11 +154,12 @@ void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split
     //     run_mha_fwd_<cutlass::half_t, kHeadSize>(params, stream);
     // });
 #ifdef C_DEBUG
+    printf("calling fp8_kernel\n");
     if (params.d == 128) {
-        run_mha_fwd_<cutlass::half_t, 128>(params, stream);
-    } else {
-        run_mha_fwd_<cutlass::half_t, 256>(params, stream);
-    }
+        run_mha_fwd_<cutlass::float_e4m3_t, 128>(params, stream);
+    } else if (params.d == 256) {
+        run_mha_fwd_<cutlass::float_e4m3_t, 256>(params, stream);
+    }  
 #else
     if (!params.is_e4m3) {
         if (params.is_bf16) {

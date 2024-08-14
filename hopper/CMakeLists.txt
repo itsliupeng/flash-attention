@@ -64,12 +64,12 @@ add_definitions(-DC_DEBUG)
 
 # Create a shared library
 set(FLASH_ATTN_CU
-    "flash_fwd_hdim128_fp16_sm90.cu"
+    # "flash_fwd_hdim128_fp16_sm90.cu"
     # "flash_fwd_hdim128_bf16_sm90.cu"
-    # "flash_fwd_hdim128_e4m3_sm90.cu"
-    "flash_fwd_hdim256_fp16_sm90.cu"
+    "flash_fwd_hdim128_e4m3_sm90.cu"
+    # "flash_fwd_hdim256_fp16_sm90.cu"
     # "flash_fwd_hdim256_bf16_sm90.cu"
-    # "flash_fwd_hdim256_e4m3_sm90.cu"
+    "flash_fwd_hdim256_e4m3_sm90.cu"
     )
 
 add_library(vllm_flash_attn_2_cuda SHARED

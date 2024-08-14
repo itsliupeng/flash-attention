@@ -9,9 +9,10 @@ int main(int argc, const char *argv[]) {
     int num_heads = 16;
     int head_size = 256;
     auto options = torch::TensorOptions().device(torch::kCUDA).dtype(torch::kHalf);
-    at::Tensor q = torch::randn({batch_size, seqlen_q, num_heads, head_size},  options);
-    at::Tensor k = torch::randn({batch_size, seqlen_q, num_heads, head_size},  options);
-    at::Tensor v = torch::randn({batch_size, seqlen_q, num_heads, head_size}, options);
+    // auto options = torch::TensorOptions().device(torch::kCUDA).dtype(at::ScalarType::Float8_e4m3fn);
+    at::Tensor q = torch::randn({batch_size, seqlen_q, num_heads, head_size},  options).to(torch::kFloat8_e4m3fn);
+    at::Tensor k = torch::randn({batch_size, seqlen_q, num_heads, head_size},  options).to(torch::kFloat8_e4m3fn);
+    at::Tensor v = torch::randn({batch_size, seqlen_q, num_heads, head_size}, options).to(torch::kFloat8_e4m3fn);
     at::Tensor o = torch::randn({batch_size, seqlen_q, num_heads, head_size},  options);
     std::cout << q.sizes() << " " << q.device().type() << " " << q.layout() << std::endl;
 
@@ -39,7 +40,7 @@ int main(int argc, const char *argv[]) {
     // Call the function
     std::vector<at::Tensor> result = mha_fwd(q, k, v, out_, softmax_scale, is_causal);
 
-    std::cout << o.sizes() << std::endl;
+    std::cout << out_.value().sizes() << std::endl;
 
     std::cout << "Done." << std::endl;
 
