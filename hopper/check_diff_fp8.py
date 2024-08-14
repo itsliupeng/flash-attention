@@ -8,6 +8,9 @@ N = 32
 # H = 256
 B, H, S = 8, 128, 128
 
+is_causal = True
+print(f"is_causal: {is_causal}")
+
 print(">>>>> MHA")
 for S in [128, 512, 1024]:
     for H in [128, 256]:
@@ -21,12 +24,12 @@ for S in [128, 512, 1024]:
             f_o = torch.nn.functional.scaled_dot_product_attention(q.to(torch.float16).transpose(1, 2), k.to(torch.float16).transpose(1, 2), v.to(torch.float16).transpose(1, 2), is_causal=True).transpose(1, 2)
 
             # f_o = vllm_flash_attn_func(q, k, v, causal=True)
-            o, _ = flash_attn_func(q, k, v, causal=True)
+            o, _ = flash_attn_func(q, k, v, causal=is_causal)
 
             # torch.cuda.synchronize()
 
-            equivalent = torch.allclose(o, f_o, rtol=1e-2, atol=1e-3)
-            diff = abs(o - f_o)
+            equivalent = torch.allclose(o, f_o, rtol=0, atol=0.01)
+            diff = abs(o.to(torch.float32) - f_o.to(torch.float32))
             print(f"{S} - {H} - {B}, {q.shape},  Same ? {equivalent}, {diff.max()} - {diff.sum()}")
             
 print(">>>>> MQA")
@@ -40,10 +43,10 @@ for S in [128, 512, 1024]:
             f_o = torch.nn.functional.scaled_dot_product_attention(q.to(torch.float16).transpose(1, 2), k.to(torch.float16).transpose(1, 2), v.to(torch.float16).transpose(1, 2), is_causal=True).transpose(1, 2)
 
             # f_o = vllm_flash_attn_func(q, k, v, causal=True)
-            o, _ = flash_attn_func(q, k, v, causal=True)
+            o, _ = flash_attn_func(q, k, v, causal=is_causal)
 
             # torch.cuda.synchronize()
 
-            equivalent = torch.allclose(o, f_o, rtol=1e-2, atol=1e-3)
-            diff = abs(o - f_o)
+            equivalent = torch.allclose(o, f_o, rtol=0, atol=0.01)
+            diff = abs(o.to(torch.float32) - f_o.to(torch.float32))
             print(f"{S} - {H} - {B}, {q.shape},  Same ? {equivalent}, {diff.max()} - {diff.sum()}")
