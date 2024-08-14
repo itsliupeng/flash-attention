@@ -428,23 +428,28 @@ struct CollectiveMainloopFwd {
 
         int lane_predicate = cute::elect_one_sync();
         int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
-        if (warp_idx_in_warpgroup == 0 && lane_predicate) {
-            pipeline_k.producer_acquire(smem_pipe_write);
-            copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
-        }
+        // if (warp_idx_in_warpgroup == 0 && lane_predicate) {
+        //     pipeline_k.producer_acquire(smem_pipe_write);
+        //     copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+        //         tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
+        // }
 
         // Wait for the MMA warpgroups to say that smem_q is ready
         // for fp8, change from NumThreadsPerWarp to NumThreadsPerWarpGroup ??
         cutlass::arch::NamedBarrier::sync(NumMmaThreads + cutlass::NumThreadsPerWarpGroup, static_cast<int>(FwdNamedBarriers::QueryEmpty) /*id*/); // 128 * 2 + 128
+        if (warp_idx_in_warpgroup == 0 && lane_predicate) {
+            shared_storage.barrier_Q.arrive_and_expect_tx(TmaTransactionBytesQ);
+            copy(mainloop_params.tma_load_Q.with(reinterpret_cast<cutlass::arch::ClusterTransactionBarrier::ValueType&>(shared_storage.barrier_Q), 0 /*mcast_mask*/), tQgQ, tQsQ);  
+        }
 
         if constexpr(Is_causal) {
             if (warp_idx_in_warpgroup == 0 && lane_predicate) {
-                shared_storage.barrier_Q.arrive_and_expect_tx(TmaTransactionBytesQ);
-                copy(mainloop_params.tma_load_Q.with(reinterpret_cast<cutlass::arch::ClusterTransactionBarrier::ValueType&>(shared_storage.barrier_Q), 0 /*mcast_mask*/), tQgQ, tQsQ);
+                pipeline_k.producer_acquire(smem_pipe_write);
+                copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                    tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
                 pipeline_v.producer_acquire(smem_pipe_write);
                 copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                    tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));
+                    tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));        
             }
 
             shared_storage.barrier_O.wait((work_idx + 1) % 2);         
@@ -505,8 +510,9 @@ struct CollectiveMainloopFwd {
             ++smem_pipe_read;
         } else {
             if (warp_idx_in_warpgroup == 0 && lane_predicate) {
-                shared_storage.barrier_Q.arrive_and_expect_tx(TmaTransactionBytesQ);
-                copy(mainloop_params.tma_load_Q.with(reinterpret_cast<cutlass::arch::ClusterTransactionBarrier::ValueType&>(shared_storage.barrier_Q), 0 /*mcast_mask*/), tQgQ, tQsQ);
+                pipeline_k.producer_acquire(smem_pipe_write);
+                copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                    tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
                 pipeline_v.producer_acquire(smem_pipe_write);
                 copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                     tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));        
