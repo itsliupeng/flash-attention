@@ -214,8 +214,8 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
     static constexpr bool Is_WS = Ktraits::Is_WS;
     static constexpr bool kUseVarSeqLen = Seqlen_traits::kUseVarSeqLen;
 
-    static constexpr int NumMmaThreads = size(typename Ktraits::TiledMma0{});
-    static constexpr int NumCopyThreads = !Is_WS ? 0 : cutlass::NumThreadsPerWarpGroup;
+    static constexpr int NumMmaThreads = size(typename Ktraits::TiledMma0{}); // 128 * 2
+    static constexpr int NumCopyThreads = !Is_WS ? 0 : cutlass::NumThreadsPerWarpGroup; // 128
     static constexpr int kBlockM = Ktraits::kBlockM;
     // static constexpr int kBlockN = Ktraits::kBlockN;
     // static constexpr int kHeadDim = Ktraits::kHeadDim;
@@ -260,7 +260,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
         ? MainloopPipeline::ThreadCategory::Producer
         : MainloopPipeline::ThreadCategory::Consumer;
     pipeline_params.is_leader = warp_group_thread_idx == 0;
-    pipeline_params.num_consumers = NumMmaThreads;
+    pipeline_params.num_consumers = NumMmaThreads; // 128 * 2
 
     if (warp_idx == 0 && lane_predicate) {
         shared_storage.barrier_Q.init(1 /*numThreads*/);
@@ -269,7 +269,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
     // We're counting on pipeline_k to call cutlass::arch::fence_barrier_init();
     MainloopPipeline pipeline_k(shared_storage.pipeline_k, pipeline_params, ClusterShape{});
     // pipeline_v has producer warpgroup for its consumer in fp8 kernel
-    pipeline_params.num_consumers = NumCopyThreads;
+    pipeline_params.num_consumers = NumCopyThreads; // 128
     pipeline_params.role = MainloopPipeline::ThreadCategory::ProducerConsumer;
     MainloopPipeline pipeline_v(shared_storage.pipeline_v, pipeline_params, ClusterShape{});
 
