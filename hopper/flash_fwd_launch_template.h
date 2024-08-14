@@ -123,10 +123,10 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
     int smem_size = sizeof(typename Kernel_traits::SharedStorage);
 #ifdef C_DEBUG
     int smem_size_q = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_q));
-    int smem_size_k = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_k));
+    // int smem_size_k = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_k));
     int smem_size_v = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_v));
     int smem_size_o = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_o));
-    printf("smem_size = %d, q = %d, k = %d, v = %d, o = %d.\n", smem_size, smem_size_q, smem_size_k, smem_size_v, smem_size_o);
+    printf("smem_size = %d, q = %d, k = %d, v = %d, o = %d.\n", smem_size, smem_size_q, 0, smem_size_v, smem_size_o);
     Kernel_traits kernel_traits;
     kernel_traits.print();
     Seqlen_traits seqlen_traits;
@@ -200,7 +200,7 @@ template<typename T>
 void run_mha_fwd_hdim64_fp8(Flash_fwd_params &params, cudaStream_t stream) {
     constexpr static int Headdim = 64;
     constexpr static int kBlockM = 192;
-    constexpr static int kBlockN = 128;
+    constexpr static int kBlockN = 256;
     constexpr static int kNWarps = 4 + kBlockM/16; // 16
     constexpr static int kStages = 4;    
     BOOL_SWITCH(params.is_causal, Is_causal, [&] {
@@ -219,7 +219,7 @@ template<typename T>
 void run_mha_fwd_hdim128_fp8(Flash_fwd_params &params, cudaStream_t stream) {
     constexpr static int Headdim = 128;
     constexpr static int kBlockM = 128;
-    constexpr static int kBlockN = 256;
+    constexpr static int kBlockN = 512;
     constexpr static int kNWarps = 4 + kBlockM/16; // 12
     constexpr static int kStages = 2;    
     BOOL_SWITCH(params.is_causal, Is_causal, [&] {
@@ -238,7 +238,7 @@ template<typename T>
 void run_mha_fwd_hdim256_fp8(Flash_fwd_params &params, cudaStream_t stream) {
     constexpr static int Headdim = 256; 
     constexpr static int kBlockM = 128;
-    constexpr static int kBlockN = 128;
+    constexpr static int kBlockN = 256;
     constexpr static int kNWarps = 4 + kBlockM/16; // 12
     constexpr static int kStages = 2;    
     BOOL_SWITCH(params.is_causal, Is_causal, [&] {

@@ -38,7 +38,7 @@ template <int kStages, class Gemm1Type, class Gemm2Type, class OutputType, class
 struct SharedStorageQKVOVt {
   struct {
     cute::array_aligned<Gemm1Type, cute::cosize_v<SmemLayoutQ>> smem_q;
-    cute::array_aligned<Gemm1Type, cute::cosize_v<SmemLayoutK>> smem_k;
+    // cute::array_aligned<Gemm1Type, cute::cosize_v<SmemLayoutK>> smem_k;
     cute::array_aligned<Gemm2Type, cute::cosize_v<SmemLayoutV>> smem_v;  
     union {
         cute::array_aligned<Gemm2Type, cute::cosize_v<SmemLayoutV>> smem_v_out;
@@ -49,7 +49,7 @@ struct SharedStorageQKVOVt {
     cutlass::arch::ClusterTransactionBarrier barrier_Q;
     cutlass::arch::ClusterBarrier barrier_O;
     typename cutlass::PipelineTmaAsync<kStages>::SharedStorage pipeline_k;
-    typename cutlass::PipelineTmaAsync<kStages>::SharedStorage pipeline_v;
+    // typename cutlass::PipelineTmaAsync<kStages>::SharedStorage pipeline_v;
     typename cutlass::PipelineAsync<kStages>::SharedStorage pipeline_vt;
     int tile_count_semaphore;
   };
