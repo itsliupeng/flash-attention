@@ -219,12 +219,12 @@ device = 'cuda'
 # dtype = torch.float16
 dtype = torch.float8_e4m3fn
 
-bs_seqlen_vals = [(32, 512), (16, 1024), (8, 2048), (4, 4224), (2, 8448), (1, 8448 * 2)]
+bs_seqlen_vals = [(32, 512), (16, 1024), (8, 2048), (4, 4224), (2, 8448), (1, 8448 * 2), (1, 8448 * 4)]
 # bs_seqlen_vals = [(32, 512), (16, 1024), (8, 2048), (4, 4096), (2, 8192), (1, 8192 * 2)]
 # bs_seqlen_vals = [(4, 4096), (2, 8192), (1, 8192 * 2), (4, 4224), (2, 8448), (1, 8448 * 2)]
 # bs_seqlen_vals = [(32, 512), (16, 1024), (8, 2048)]
-# causal_vals = [False, True]
-causal_vals = [False]
+causal_vals = [False, True]
+# causal_vals = [False]
 headdim_vals = [256]
 dim = 2048
 # dim = 256

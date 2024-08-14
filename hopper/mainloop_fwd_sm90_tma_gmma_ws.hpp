@@ -369,7 +369,7 @@ struct CollectiveMainloopFwd {
         using SmemLayoutTransposeVt = typename Ktraits::SmemLayoutTransposeVt;
 
         Tensor sQ = make_tensor(make_smem_ptr(shared_storage.smem_q.data()), SmemLayoutQ{});
-        Tensor sK = make_tensor(make_smem_ptr(shared_storage.smem_k.data()), SmemLayoutK{});
+        Tensor sK = make_tensor(make_smem_ptr(shared_storage.smem_v.data()), SmemLayoutK{});
         Tensor sV = make_tensor(make_smem_ptr(shared_storage.smem_v.data()), SmemLayoutV{});
         
         Tensor sV_divide = as_position_independent_swizzle_tensor(make_tensor(make_smem_ptr(shared_storage.smem_v.data()), SmemLayoutTransposeV{}));
@@ -428,11 +428,6 @@ struct CollectiveMainloopFwd {
 
         int lane_predicate = cute::elect_one_sync();
         int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
-        // if (warp_idx_in_warpgroup == 0 && lane_predicate) {
-        //     pipeline_k.producer_acquire(smem_pipe_write);
-        //     copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-        //         tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
-        // }
 
         // Wait for the MMA warpgroups to say that smem_q is ready
         // for fp8, change from NumThreadsPerWarp to NumThreadsPerWarpGroup ??
@@ -447,9 +442,9 @@ struct CollectiveMainloopFwd {
                 pipeline_k.producer_acquire(smem_pipe_write);
                 copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                     tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
-                pipeline_v.producer_acquire(smem_pipe_write);
-                copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                    tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));        
+                // pipeline_v.producer_acquire(smem_pipe_write);
+                // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                //     tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));        
             }
 
             shared_storage.barrier_O.wait((work_idx + 1) % 2);         
@@ -469,9 +464,9 @@ struct CollectiveMainloopFwd {
                     pipeline_k.producer_acquire(smem_pipe_write);
                     copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                         tKgK(_, n_block-1), tKsK(_, smem_pipe_write.index()));
-                    pipeline_v.producer_acquire(smem_pipe_write);
-                    copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                        tVgV(_, n_block-1), tVsV(_, smem_pipe_write.index()));
+                    // pipeline_v.producer_acquire(smem_pipe_write);
+                    // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                    //     tVgV(_, n_block-1), tVsV(_, smem_pipe_write.index()));
                 }
             }            
             
@@ -490,9 +485,9 @@ struct CollectiveMainloopFwd {
                     pipeline_k.producer_acquire(smem_pipe_write);
                     copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                         tKgK(_, n_block-1), tKsK(_, smem_pipe_write.index()));
-                    pipeline_v.producer_acquire(smem_pipe_write);
-                    copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                        tVgV(_, n_block-1), tVsV(_, smem_pipe_write.index()));
+                    // pipeline_v.producer_acquire(smem_pipe_write);
+                    // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                    //     tVgV(_, n_block-1), tVsV(_, smem_pipe_write.index()));
                 }                                                                
             }       
 
@@ -513,9 +508,9 @@ struct CollectiveMainloopFwd {
                 pipeline_k.producer_acquire(smem_pipe_write);
                 copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                     tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
-                pipeline_v.producer_acquire(smem_pipe_write);
-                copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                    tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));        
+                // pipeline_v.producer_acquire(smem_pipe_write);
+                // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                //     tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));        
             }
             // With fp8 kernel, smem_o is in union with smem_v_out,
             // so could use NamedBarrier instead of ClusterBarrier.
@@ -539,9 +534,9 @@ struct CollectiveMainloopFwd {
                     pipeline_k.producer_acquire(smem_pipe_write);
                     copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                         tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
-                    pipeline_v.producer_acquire(smem_pipe_write);
-                    copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                        tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));                
+                    // pipeline_v.producer_acquire(smem_pipe_write);
+                    // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                    //     tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));                
                 }
                 
                 pipeline_v.consumer_wait(smem_pipe_read);
@@ -563,9 +558,9 @@ struct CollectiveMainloopFwd {
                     pipeline_k.producer_acquire(smem_pipe_write);
                     copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                         tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
-                    pipeline_v.producer_acquire(smem_pipe_write);
-                    copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                        tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));                                
+                    // pipeline_v.producer_acquire(smem_pipe_write);
+                    // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                    //     tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));                                
                 }
                 
                 pipeline_v.consumer_wait(smem_pipe_read);
@@ -840,7 +835,7 @@ struct CollectiveMainloopFwd {
         static constexpr int kBlockN = get<1>(TileShape_MNK{});
 
         Tensor sQ = make_tensor(make_smem_ptr(shared_storage.smem_q.data()), SmemLayoutQ{});
-        Tensor sK = make_tensor(make_smem_ptr(shared_storage.smem_k.data()), SmemLayoutK{});
+        Tensor sK = make_tensor(make_smem_ptr(shared_storage.smem_v.data()), SmemLayoutK{});
         Tensor sVt = make_tensor(make_smem_ptr(shared_storage.smem_v_out.data()), SmemLayoutVt{});
 
         typename Ktraits::TiledMma0 tiled_mma0;

@@ -257,10 +257,11 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
     pipeline_params.transaction_bytes = CollectiveMainloop::TmaTransactionBytesK;
     int warp_group_idx = cutlass::canonical_warp_group_idx();
     pipeline_params.role = warp_group_idx == 0
-        ? MainloopPipeline::ThreadCategory::Producer
+        // ? MainloopPipeline::ThreadCategory::Producer
+        ? MainloopPipeline::ThreadCategory::ProducerConsumer
         : MainloopPipeline::ThreadCategory::Consumer;
     pipeline_params.is_leader = warp_group_thread_idx == 0;
-    pipeline_params.num_consumers = NumMmaThreads; // 128 * 2
+    pipeline_params.num_consumers = NumMmaThreads + NumCopyThreads; // 128 * 2
 
     if (warp_idx == 0 && lane_predicate) {
         shared_storage.barrier_Q.init(1 /*numThreads*/);
@@ -269,9 +270,9 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
     // We're counting on pipeline_k to call cutlass::arch::fence_barrier_init();
     MainloopPipeline pipeline_k(shared_storage.pipeline_k, pipeline_params, ClusterShape{});
     // pipeline_v has producer warpgroup for its consumer in fp8 kernel
-    pipeline_params.num_consumers = NumCopyThreads; // 128
-    pipeline_params.role = MainloopPipeline::ThreadCategory::ProducerConsumer;
-    MainloopPipeline pipeline_v(shared_storage.pipeline_v, pipeline_params, ClusterShape{});
+    // pipeline_params.num_consumers = NumCopyThreads; // 128
+    // pipeline_params.role = MainloopPipeline::ThreadCategory::ProducerConsumer;
+    // MainloopPipeline pipeline_v(shared_storage.pipeline_v, pipeline_params, ClusterShape{});
 
     CollectiveMainloop collective_mainloop;
     CollectiveEpilogue collective_epilogue;
@@ -319,7 +320,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
                 }
             }
             collective_mainloop.load_fp8(
-                mainloop_params, pipeline_k, pipeline_v, pipeline_vt,
+                mainloop_params, pipeline_k, pipeline_k, pipeline_vt,
                 smem_pipe_write, smem_pipe_read, shared_storage,
                 scheduler, scheduler_params, work_tile_info, block_coord, work_idx,
                 seqlen_traits_q, seqlen_traits_k);
@@ -328,7 +329,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
             // if constexpr (Is_causal) {
             //     cutlass::arch::NamedBarrier::sync(NumCopyThreads, static_cast<int>(FwdNamedBarriers::ProducerWG) /*id*/); }
         }
-        collective_mainloop.load_tail_one_write(pipeline_k, pipeline_v, smem_pipe_write);
+        collective_mainloop.load_tail_one_write(pipeline_k, pipeline_k, smem_pipe_write);
     } else {  // Consumer
         cutlass::arch::warpgroup_reg_alloc<Ktraits::kNWarps == 12 ? 232 : 160>();        
 
