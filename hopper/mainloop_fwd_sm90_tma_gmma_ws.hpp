@@ -26,18 +26,18 @@ struct SmemTransposeFp8_64x64 {
 
   using Element = cutlass::float_e4m3_t;
   
-  using ldsm_thread_shape = Shape<_4, _1, _8, _4>;
-  using ldsm_value_shape = Shape<_2, _8, _2, _1>;  
+  using ldsm_thread_shape = Shape<_4, _1, _8, _4>; // 32 * 4
+  using ldsm_value_shape = Shape<_2, _8, _2, _1>;   // 16 * 2
   using ldsm_value_stride = Stride<_2, _4, _1, _0>;
   using TiledCopyLDSM = decltype(make_tiled_copy(
       Copy_Atom<SM75_U16x8_LDSM_T, Element>{}, Layout<ldsm_thread_shape>{},
       Layout<ldsm_value_shape, ldsm_value_stride>{}));
   TiledCopyLDSM tiled_copy_ldsm;  
 
-  using stsm_thread_shape = Shape<_4, _1, _8, _4>;
+  using stsm_thread_shape = Shape<_4, _1, _8, _4>; // 32 * 4
   // using stsm_thread_stride = Stride<_1, _0, _4, _32>;
 #ifndef NO_FP8_COLUMN_PERMUTE
-  using stsm_value_shape = Shape<_4, _4, _1, _2>;
+  using stsm_value_shape = Shape<_4, _4, _1, _2>; // 16 * 2
   using stsm_value_stride = Stride<_1, _8, _0, _4>;
 #else
   using stsm_value_shape = Shape<_4, _4, _2, _1>;
@@ -362,8 +362,10 @@ struct CollectiveMainloopFwd {
          const Seqlen_traits& seqlen_traits_q,
          const Seqlen_traits& seqlen_traits_k         
          ) {
-        
+
+        // Sw<2,4,3> o smem_ptr[8b](unset) o (((_8,_8),(_16,_4)),_2,_4,_2):(((_64,_512),(_1,_16)),_4096,_8192,_32768)
         using SmemLayoutTransposeV = typename Ktraits::SmemLayoutTransposeV;
+        // Sw<2,4,3> o smem_ptr[8b](unset) o (((_16,_4),(_8,_8)),_2,_4,_2):(((_1,_16),(_64,_512)),_16384,_4096,_32768)
         using SmemLayoutTransposeVt = typename Ktraits::SmemLayoutTransposeVt;
 
         Tensor sQ = make_tensor(make_smem_ptr(shared_storage.smem_q.data()), SmemLayoutQ{});
@@ -445,7 +447,7 @@ struct CollectiveMainloopFwd {
                     tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));
             }
 
-            shared_storage.barrier_O.wait((work_idx + 1) % 2);            
+            shared_storage.barrier_O.wait((work_idx + 1) % 2);         
                         
             CUTLASS_PRAGMA_UNROLL
             for (int iter = 0; iter < kStages && n_block > 0; ++iter, --n_block) {

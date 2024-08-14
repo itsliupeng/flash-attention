@@ -177,72 +177,97 @@ struct Flash_fwd_kernel_traits_fp8 {
     using index_t = int64_t;      
 
     // The number of threads.
-    static constexpr int kNWarps = kNWarps_;
-    static constexpr int kNThreads = kNWarps * cutlass::NumThreadsPerWarp;
-    static constexpr int NumProducerThreads = cutlass::NumThreadsPerWarpGroup;
+    static constexpr int kNWarps = kNWarps_; // 12
+    static constexpr int kNThreads = kNWarps * cutlass::NumThreadsPerWarp; 
+    static constexpr int NumProducerThreads = cutlass::NumThreadsPerWarpGroup; // 128
 
     static constexpr bool Is_Q_in_regs = Is_Q_in_regs_;
     static_assert(kNWarps_ == 12 || kNWarps_ == 16);
     static constexpr bool Is_WS = true;    
     static_assert(!Is_Q_in_regs, "Warp-specialization does not support Q in registers");    
 
-    static constexpr int kBlockM = kBlockM_;
-    static constexpr int kBlockN = kBlockN_;
-    static constexpr int kHeadDim = kHeadDim_;
+    static constexpr int kBlockM = kBlockM_; // 128
+    static constexpr int kBlockN = kBlockN_; // 128
+    static constexpr int kHeadDim = kHeadDim_; // 256
     static_assert(kHeadDim % 32 == 0);
     using TileShape_MNK = Shape<Int<kBlockM>, Int<kBlockN>, Int<kHeadDim>>;
 
-    static constexpr int kClusterM = kClusterM_;
+    static constexpr int kClusterM = kClusterM_; // 1
     using ClusterShape_MNK = Shape<Int<kClusterM>, _1, _1>;
 
-    static constexpr int kStages = kStages_;
+    static constexpr int kStages = kStages_; // 2
     static_assert(kStages > 1);
 
-    using AtomLayoutMNK = Layout<Shape<Int<kBlockM / 64>, _1, _1>>;    
+    using AtomLayoutMNK = Layout<Shape<Int<kBlockM / 64>, _1, _1>>;  // (2, 1, 1)
+    // TiledMma0: TiledMMA
+    //     ThrLayoutVMNK:  (_128,_2,_1,_1):(_1,_128,_0,_0)
+    //     PermutationMNK: (_,_,_)
+    //     MMA_Atom
+    //     ThrID:      _128:_1
+    //     LayoutA_TV: (_128,(_64,_32)):(_0,(_1,_64))
+    //     LayoutB_TV: (_128,(_128,_32)):(_0,(_1,_128))
+    //     LayoutC_TV: ((_4,_8,_4),(_2,_2,_16)):((_128,_1,_16),(_64,_8,_512))
     using TiledMma0 = decltype(cute::make_tiled_mma(
         cute::GMMA::ss_op_selector<Element, Element, ElementAccum, TileShape_MNK>(),
         AtomLayoutMNK{}));
     
+    // TiledMma1: TiledMMA
+    //     ThrLayoutVMNK:  (_128,_2,_1,_1):(_1,_128,_0,_0)
+    //     PermutationMNK: (_,_,_)
+    //     MMA_Atom
+    //     ThrID:      _128:_1
+    //     LayoutA_TV: ((_4,_8,_4),(_4,_2,_2)):((_256,_1,_16),(_64,_8,_1024))
+    //     LayoutB_TV: (_128,(_256,_32)):(_0,(_1,_256))
+    //     LayoutC_TV: ((_4,_8,_4),(_2,_2,_32)):((_128,_1,_16),(_64,_8,_512))
     using TiledMma1 = decltype(cute::make_tiled_mma(
         cute::GMMA::rs_op_selector<Element, Element, ElementAccum, decltype(select<0, 2, 1>(TileShape_MNK{}))>(),
         AtomLayoutMNK{}));
 
     using SmemLayoutAtomQ = decltype(cutlass::gemm::collective::detail::ss_smem_selector<GMMA::Major::K, Element,
         decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
+    // Sw<3,4,3> o smem_ptr[8b](unset) o (_128,(_128,_2)):(_128,(_1,_16384))
     using SmemLayoutQ = decltype(tile_to_shape(SmemLayoutAtomQ{}, select<0, 2>(TileShape_MNK{})));
 
     using SmemLayoutAtomK = decltype(cutlass::gemm::collective::detail::ss_smem_selector<GMMA::Major::K, Element,
         decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
+    // Sw<3,4,3> o smem_ptr[8b](unset) o (_128,(_128,_2),_2):(_128,(_1,_16384),_32768)
     using SmemLayoutK =
         decltype(tile_to_shape(SmemLayoutAtomK{},
                  make_shape(shape<1>(TileShape_MNK{}), shape<2>(TileShape_MNK{}), Int<kStages>{})));
 
     using TransposeShapeAtomV = Shape<_64, _64>;    
     using SmemLayoutAtomV = decltype(tile_to_shape(GMMA::Layout_K_SW64_Atom<Element>{}, TransposeShapeAtomV{}));
+    // Sw<2,4,3> o smem_ptr[8b](unset) o (_128,(_64,_4),_2):(_64,(_1,_8192),_32768)
     using SmemLayoutV =
         decltype(tile_to_shape(SmemLayoutAtomV{},
-                 make_shape(shape<1>(TileShape_MNK{}), shape<2>(TileShape_MNK{}), Int<kStages>{})));
+                 make_shape(shape<1>(TileShape_MNK{}), shape<2>(TileShape_MNK{}), Int<kStages>{}))); // (N, K, 2)
     
     // for fp8 in-kernel transpose -- src layout
+    // Sw<2,4,3> o smem_ptr[8b](unset) o ((_64,_64),_2,_4,_2):((_64,_1),_4096,_8192,_32768)
     using SmemLayoutDivideV = decltype(tiled_divide(SmemLayoutV{}, TransposeShapeAtomV{}));
-    using SmemShapeLDSM = Shape<Shape<_8, _8>, Shape<_16, _4>>;
+    using SmemShapeLDSM = Shape<Shape<_8, _8>, Shape<_16, _4>>; // 128 * 2 / 8 = 32 (8x8 fp16) = 64 (8x8 fp8)
+    // (((_8,_8),(_16,_4)),_2,_4,_2)
     using FactoringShapeV = decltype(make_shape(SmemShapeLDSM{},
         shape<1>(SmemLayoutDivideV{}), shape<2>(SmemLayoutDivideV{}), shape<3>(SmemLayoutDivideV{})));
+    // Sw<2,4,3> o smem_ptr[8b](unset) o (((_8,_8),(_16,_4)),_2,_4,_2):(((_64,_512),(_1,_16)),_4096,_8192,_32768)
     using SmemLayoutTransposeV = decltype(composition(SmemLayoutDivideV{}, make_layout(FactoringShapeV{})));
 
     // For fp8, this is the memory transpose.
+    // Sw<2,4,3> o smem_ptr[8b](unset) o (_64,_64):(_64,_1)
     using SmemLayoutAtomVt = decltype(tile_to_shape(GMMA::Layout_K_SW64_Atom<Element>{}, TransposeShapeAtomV{}));
+    // Sw<2,4,3> o smem_ptr[8b](unset) o (_256,(_64,_2),_2):(_64,(_1,_16384),_32768)
     using SmemLayoutVt =
         decltype(tile_to_shape(SmemLayoutAtomVt{},
-                 make_shape(shape<2>(TileShape_MNK{}), shape<1>(TileShape_MNK{}), Int<kStages>{})));
+                 make_shape(shape<2>(TileShape_MNK{}), shape<1>(TileShape_MNK{}), Int<kStages>{}))); // (K, N, 2)
 
     // for fp8 in-kernel transpose -- dst layout
+    // Sw<2,4,3> o smem_ptr[8b](unset) o ((_64,_2),_256,_2):((_1,_16384),_64,_32768)
     using SmemLayoutVtTrans =
         decltype(composition(SmemLayoutVt{},
-                             make_ordered_layout(product_each(shape(SmemLayoutV{})), Step<_2, _1, _3>{})));
+                             make_ordered_layout(product_each(shape(SmemLayoutV{})), Step<_2, _1, _3>{}))); // (K, N, 2)
     using SmemLayoutDivideVt = decltype(tiled_divide(SmemLayoutVtTrans{}, TransposeShapeAtomV{}));
 #ifndef NO_FP8_COLUMN_PERMUTE
-    using SmemShapeSTSM = Shape<Shape<_16, _4>, Shape<_8, _8>>;
+    using SmemShapeSTSM = Shape<Shape<_16, _4>, Shape<_8, _8>>; // hit
 #else
     using SmemShapeSTSM = Shape<Shape<_16, _4>, Shape<_16, _4>>;
 #endif
@@ -289,7 +314,15 @@ struct Flash_fwd_kernel_traits_fp8 {
         cute::print("\t SmemLayoutQ: "); cute::print(SmemLayoutQ{}); cute::print("\n");
         cute::print("\t SmemLayoutK: "); cute::print(SmemLayoutK{}); cute::print("\n");
         cute::print("\t SmemLayoutV: "); cute::print(SmemLayoutV{}); cute::print("\n");
+        cute::print("\t SmemLayoutDivideV: "); cute::print(SmemLayoutDivideV{}); cute::print("\n");
+        cute::print("\t FactoringShapeV: "); cute::print(FactoringShapeV{}); cute::print("\n");
+        cute::print("\t SmemLayoutTransposeV: "); cute::print(SmemLayoutTransposeV{}); cute::print("\n");
+        cute::print("\t SmemLayoutAtomVt: "); cute::print(SmemLayoutAtomVt{}); cute::print("\n");
         cute::print("\t SmemLayoutVt: "); cute::print(SmemLayoutVt{}); cute::print("\n");
+        cute::print("\t SmemLayoutVtTrans: "); cute::print(SmemLayoutVtTrans{}); cute::print("\n");
+        cute::print("\t SmemLayoutDivideVt: "); cute::print(SmemLayoutDivideVt{}); cute::print("\n");
+        cute::print("\t FactoringShapeVt: "); cute::print(FactoringShapeVt{}); cute::print("\n");
+        cute::print("\t SmemLayoutTransposeVt: "); cute::print(SmemLayoutTransposeVt{}); cute::print("\n");
         cute::print("\t SmemLayoutO: "); cute::print(SmemLayoutO{}); cute::print("\n");
         cute::print("\t TiledMma0: "); cute::print(TiledMma0{}); cute::print("\n");
         cute::print("\t TiledMma1: "); cute::print(TiledMma1{}); cute::print("\n");
