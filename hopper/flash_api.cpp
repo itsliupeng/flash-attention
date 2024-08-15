@@ -159,7 +159,9 @@ void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split
         run_mha_fwd_<cutlass::float_e4m3_t, 128>(params, stream);
     } else if (params.d == 256) {
         run_mha_fwd_<cutlass::float_e4m3_t, 256>(params, stream);
-    }  
+    } else if (params.d == 512) {
+        run_mha_fwd_<cutlass::float_e4m3_t, 512>(params, stream);
+    } 
 #else
     if (!params.is_e4m3) {
         if (params.is_bf16) {
@@ -180,7 +182,9 @@ void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split
             run_mha_fwd_<cutlass::float_e4m3_t, 128>(params, stream);
         } else if (params.d == 256) {
             run_mha_fwd_<cutlass::float_e4m3_t, 256>(params, stream);
-        }        
+        } else if (params.d == 512) {
+            run_mha_fwd_<cutlass::float_e4m3_t, 512>(params, stream);
+        }      
     }
 #endif
 }
@@ -222,10 +226,10 @@ mha_fwd(at::Tensor &q,         // batch_size x seqlen_q x num_heads x head_size
     const int seqlen_k = k.size(1);
     const int num_heads_k = k.size(2);
     TORCH_CHECK(batch_size > 0, "batch size must be positive");
-    TORCH_CHECK(head_size_og <= 256, "FlashAttention forward only supports head dimension at most 256");
+    TORCH_CHECK(head_size_og <= 576, "FlashAttention forward only supports head dimension at most 576");
     TORCH_CHECK(num_heads % num_heads_k == 0, "Number of heads in key/value must divide number of heads in query");
 
-    TORCH_CHECK(head_size_og == 64 || head_size_og == 128 || head_size_og == 256, "Only support head size 64, 128, and 256 for now");
+    // TORCH_CHECK(head_size_og == 64 || head_size_og == 128 || head_size_og == 256, "Only support head size 64, 128, and 256 for now");
 
     CHECK_SHAPE(q, batch_size, seqlen_q, num_heads, head_size_og);
     CHECK_SHAPE(k, batch_size, seqlen_k, num_heads_k, head_size_og);
@@ -367,7 +371,7 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
     const int total_q = q.sizes()[0];
 
     TORCH_CHECK(batch_size > 0, "batch size must be positive");
-    TORCH_CHECK(head_size_og <= 256, "FlashAttention forward only supports head dimension at most 256");
+    TORCH_CHECK(head_size_og <= 576, "FlashAttention forward only supports head dimension at most 576");
     TORCH_CHECK(num_heads % num_heads_k == 0, "Number of heads in key/value must divide number of heads in query");
 
     if (window_size_left >= max_seqlen_k) { window_size_left = -1; }

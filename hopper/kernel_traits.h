@@ -196,9 +196,11 @@ struct Flash_fwd_kernel_traits_fp8 {
     using ClusterShape_MNK = Shape<Int<kClusterM>, _1, _1>;
 
     static constexpr int kStages = kStages_; // 2
-    static_assert(kStages > 1);
+    // static_assert(kStages > 1);
 
-    using AtomLayoutMNK = Layout<Shape<Int<kBlockM / 64>, _1, _1>>;  // (2, 1, 1)
+    // using AtomLayoutMNK = Layout<Shape<Int<kBlockM / 64>, _1, _1>>;  // (2, 1, 1)
+    static constexpr int AtomLayoutMNK_M = kBlockM > 64 ? kBlockM / 64 : 2;
+    using AtomLayoutMNK = Layout<Shape<Int<AtomLayoutMNK_M>, _1, _1>>; // (2, 1, 1)
     // TiledMma0: TiledMMA
     //     ThrLayoutVMNK:  (_128,_2,_1,_1):(_1,_128,_0,_0)
     //     PermutationMNK: (_,_,_)

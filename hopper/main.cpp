@@ -7,7 +7,8 @@ int main(int argc, const char *argv[]) {
     int batch_size = 8;
     int seqlen_q = 128;
     int num_heads = 16;
-    int head_size = 256;
+    // int head_size = 256;
+    int head_size = 512;
     auto options = torch::TensorOptions().device(torch::kCUDA).dtype(torch::kHalf);
     // auto options = torch::TensorOptions().device(torch::kCUDA).dtype(at::ScalarType::Float8_e4m3fn);
     at::Tensor q = torch::randn({batch_size, seqlen_q, num_heads, head_size},  options).to(torch::kFloat8_e4m3fn);
