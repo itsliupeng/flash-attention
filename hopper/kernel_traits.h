@@ -33,27 +33,56 @@ struct SharedStorageQKVO {
     };
 };
 
+// template <int kStages, class Gemm1Type, class Gemm2Type, class OutputType, class SmemLayoutQ,
+//           class SmemLayoutK, class SmemLayoutV, class SmemLayoutO>
+// struct SharedStorageQKVOVt {
+//     struct {
+//         cute::array_aligned<Gemm1Type, cute::cosize_v<SmemLayoutQ>> smem_q;
+//         // cute::array_aligned<Gemm1Type, cute::cosize_v<SmemLayoutK>> smem_k;
+//         cute::array_aligned<Gemm2Type, cute::cosize_v<SmemLayoutV>> smem_v;  
+//         union {
+//             cute::array_aligned<Gemm2Type, cute::cosize_v<SmemLayoutV>> smem_v_out;
+//             cute::array_aligned<OutputType, cute::cosize_v<SmemLayoutO>> smem_o;
+//         };
+//     };
+//     struct {    
+//         cutlass::arch::ClusterTransactionBarrier barrier_Q;
+//         cutlass::arch::ClusterBarrier barrier_O;
+//         typename cutlass::PipelineTmaAsync<kStages>::SharedStorage pipeline_k;
+//         // typename cutlass::PipelineTmaAsync<kStages>::SharedStorage pipeline_v;
+//         typename cutlass::PipelineAsync<kStages>::SharedStorage pipeline_vt;
+//         int tile_count_semaphore;
+//     };
+// };
+
+// 定义新的结构体来包含 smem_v 和 smem_v_out
+template <class Gemm2Type, class SmemLayoutV>
+struct SmemVVout {
+    cute::array_aligned<Gemm2Type, cute::cosize_v<SmemLayoutV>> smem_v;
+    cute::array_aligned<Gemm2Type, cute::cosize_v<SmemLayoutV>> smem_v_out;
+};
+
 template <int kStages, class Gemm1Type, class Gemm2Type, class OutputType, class SmemLayoutQ,
           class SmemLayoutK, class SmemLayoutV, class SmemLayoutO>
 struct SharedStorageQKVOVt {
-  struct {
-    cute::array_aligned<Gemm1Type, cute::cosize_v<SmemLayoutQ>> smem_q;
-    // cute::array_aligned<Gemm1Type, cute::cosize_v<SmemLayoutK>> smem_k;
-    cute::array_aligned<Gemm2Type, cute::cosize_v<SmemLayoutV>> smem_v;  
-    union {
-        cute::array_aligned<Gemm2Type, cute::cosize_v<SmemLayoutV>> smem_v_out;
-        cute::array_aligned<OutputType, cute::cosize_v<SmemLayoutO>> smem_o;
+    struct {
+        cute::array_aligned<Gemm1Type, cute::cosize_v<SmemLayoutQ>> smem_q;
+        // 创建一个包含 SmemVVout 和 smem_o 的 union
+        union {
+            SmemVVout<Gemm2Type, SmemLayoutV> smem_v;
+            cute::array_aligned<OutputType, cute::cosize_v<SmemLayoutO>> smem_o;
+        };
     };
-  };
-  struct {    
-    cutlass::arch::ClusterTransactionBarrier barrier_Q;
-    cutlass::arch::ClusterBarrier barrier_O;
-    typename cutlass::PipelineTmaAsync<kStages>::SharedStorage pipeline_k;
-    // typename cutlass::PipelineTmaAsync<kStages>::SharedStorage pipeline_v;
-    typename cutlass::PipelineAsync<kStages>::SharedStorage pipeline_vt;
-    int tile_count_semaphore;
-  };
+    struct {
+        cutlass::arch::ClusterTransactionBarrier barrier_Q;
+        cutlass::arch::ClusterBarrier barrier_O;
+        typename cutlass::PipelineTmaAsync<kStages>::SharedStorage pipeline_k;
+        // typename cutlass::PipelineTmaAsync<kStages>::SharedStorage pipeline_v;
+        typename cutlass::PipelineAsync<kStages>::SharedStorage pipeline_vt;
+        int tile_count_semaphore;
+    };
 };
+
 
 // If Share_Q_K_smem is true, that forces Is_Q_in_regs to be true
 template<int kHeadDim_, int kBlockM_, int kBlockN_, int kNWarps_, int kStages_, bool Is_Q_in_regs_=false,
@@ -197,8 +226,10 @@ struct Flash_fwd_kernel_traits_fp8 {
 
     static constexpr int kStages = kStages_; // 2
     // static_assert(kStages > 1);
-
+    // static constexpr int AtomLayoutMNK_K = kHeadDim > 256 ? 2 : 1;
+    // using AtomLayoutMNK = Layout<Shape<Int<kBlockM / 64>, _1, Int<AtomLayoutMNK_K>>>;  // (2, 1, 1)
     using AtomLayoutMNK = Layout<Shape<Int<kBlockM / 64>, _1, _1>>;  // (2, 1, 1)
+
     // TiledMma0: TiledMMA
     //     ThrLayoutVMNK:  (_128,_2,_1,_1):(_1,_128,_0,_0)
     //     PermutationMNK: (_,_,_)

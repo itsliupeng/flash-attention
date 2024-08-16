@@ -371,11 +371,12 @@ struct CollectiveMainloopFwd {
         using SmemLayoutTransposeVt = typename Ktraits::SmemLayoutTransposeVt;
 
         Tensor sQ = make_tensor(make_smem_ptr(shared_storage.smem_q.data()), SmemLayoutQ{});
-        Tensor sK = make_tensor(make_smem_ptr(shared_storage.smem_v.data()), SmemLayoutK{});
-        Tensor sV = make_tensor(make_smem_ptr(shared_storage.smem_v.data()), SmemLayoutV{});
+        // Tensor sK = make_tensor(make_smem_ptr(shared_storage.smem_v.smem_v.data()), SmemLayoutK{});
+        Tensor sV = make_tensor(make_smem_ptr(shared_storage.smem_v.smem_v.data()), SmemLayoutV{});
+        Tensor sK = sV;
         
-        Tensor sV_divide = as_position_independent_swizzle_tensor(make_tensor(make_smem_ptr(shared_storage.smem_v.data()), SmemLayoutTransposeV{}));
-        Tensor sVt_divide = as_position_independent_swizzle_tensor(make_tensor(make_smem_ptr(shared_storage.smem_v_out.data()), SmemLayoutTransposeVt{}));
+        Tensor sV_divide = as_position_independent_swizzle_tensor(make_tensor(make_smem_ptr(shared_storage.smem_v.smem_v.data()), SmemLayoutTransposeV{}));
+        Tensor sVt_divide = as_position_independent_swizzle_tensor(make_tensor(make_smem_ptr(shared_storage.smem_v.smem_v_out.data()), SmemLayoutTransposeVt{}));
 
         auto smem_transpose_V = SmemTransposeFp8_64x64();
         auto do_transpose_V = [&](int stage) {
@@ -439,6 +440,7 @@ struct CollectiveMainloopFwd {
             copy(mainloop_params.tma_load_Q.with(reinterpret_cast<cutlass::arch::ClusterTransactionBarrier::ValueType&>(shared_storage.barrier_Q), 0 /*mcast_mask*/), tQgQ, tQsQ);  
         }
 
+        shared_storage.barrier_O.wait((work_idx + 1) % 2);
         if constexpr(Is_causal) {
             if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                 pipeline_k.producer_acquire(smem_pipe_write);
@@ -447,9 +449,7 @@ struct CollectiveMainloopFwd {
                 // pipeline_v.producer_acquire(smem_pipe_write);
                 // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                 //     tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));        
-            }
-
-            shared_storage.barrier_O.wait((work_idx + 1) % 2);         
+            }        
                         
             CUTLASS_PRAGMA_UNROLL
             for (int iter = 0; iter < kStages && n_block > 0; ++iter, --n_block) {
@@ -514,10 +514,10 @@ struct CollectiveMainloopFwd {
                 // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                 //     tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));        
             }
-            // With fp8 kernel, smem_o is in union with smem_v_out,
-            // so could use NamedBarrier instead of ClusterBarrier.
-            // But, this doesn't appear to have any benefit.
-            shared_storage.barrier_O.wait((work_idx + 1) % 2);
+            // // With fp8 kernel, smem_o is in union with smem_v_out,
+            // // so could use NamedBarrier instead of ClusterBarrier.
+            // // But, this doesn't appear to have any benefit.
+            // shared_storage.barrier_O.wait((work_idx + 1) % 2);
 
             pipeline_v.consumer_wait(smem_pipe_read);
             // pipeline_vt.producer_acquire(smem_pipe_write);
@@ -837,8 +837,8 @@ struct CollectiveMainloopFwd {
         static constexpr int kBlockN = get<1>(TileShape_MNK{});
 
         Tensor sQ = make_tensor(make_smem_ptr(shared_storage.smem_q.data()), SmemLayoutQ{});
-        Tensor sK = make_tensor(make_smem_ptr(shared_storage.smem_v.data()), SmemLayoutK{});
-        Tensor sVt = make_tensor(make_smem_ptr(shared_storage.smem_v_out.data()), SmemLayoutVt{});
+        Tensor sK = make_tensor(make_smem_ptr(shared_storage.smem_v.smem_v.data()), SmemLayoutK{});
+        Tensor sVt = make_tensor(make_smem_ptr(shared_storage.smem_v.smem_v_out.data()), SmemLayoutVt{});
 
         typename Ktraits::TiledMma0 tiled_mma0;
         typename Ktraits::TiledMma1 tiled_mma1;
@@ -867,9 +867,7 @@ struct CollectiveMainloopFwd {
         
         Tensor tSrS = partition_fragment_C(tiled_mma0, select<0, 1>(TileShape_MNK{}));        
         
-        consumer_wait(pipeline_k, smem_pipe_read);                        
-        warp_scheduler_barrier_sync();
-        flash::gemm</*zero_init=*/true, /*wg_wait=*/-1>(tiled_mma0, tSrQ, tSrK(_, _, _, smem_pipe_read.index()), tSrS);
+        // save complete.
         if (work_idx != 0) {        
             int lane_predicate = cute::elect_one_sync();
             if (cutlass::canonical_warp_idx_sync() == Ktraits::kNWarps - 1 && lane_predicate) {
@@ -880,6 +878,10 @@ struct CollectiveMainloopFwd {
                 }
             }        
         }
+
+        consumer_wait(pipeline_k, smem_pipe_read);                        
+        warp_scheduler_barrier_sync();
+        flash::gemm</*zero_init=*/true, /*wg_wait=*/-1>(tiled_mma0, tSrQ, tSrK(_, _, _, smem_pipe_read.index()), tSrS);
         warpgroup_wait<0>();
         warp_scheduler_barrier_arrive();
         pipeline_k.consumer_release(smem_pipe_read);

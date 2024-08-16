@@ -6,16 +6,16 @@ from vllm_flash_attn.flash_attn_interface import flash_attn_func as vllm_flash_a
 # S = 128
 N = 32
 # H = 256
-B, H, S = 8, 128, 128
+B, H, S = 8, 256, 128
 
-is_causal = False
+is_causal = True
 print(f"is_causal: {is_causal}")
 
 print(">>>>> MHA")
 for S in [128, 512, 1024]:
 # for S in [2048, 4096, 8192]:
-    # for H in [128, 256]:
-    for H in [512]:
+    for H in [128, 256]:
+    # for H in [512]:
         for B in [8, 16, 32, 64]:
             q = torch.rand(B, S, N, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
             k = torch.rand(B, S, N, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
@@ -38,8 +38,8 @@ for S in [128, 512, 1024]:
 print(">>>>> MQA")
 for S in [128, 512, 1024]:
 # for S in [2048, 4096, 8192]:
-    # for H in [128, 256]:
-    for H in [512]:
+    for H in [128, 256]:
+    # for H in [512]:
         for B in [8, 16, 32, 64]:
             q = torch.rand(B, 1, N, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
             k = torch.rand(B, S, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)         

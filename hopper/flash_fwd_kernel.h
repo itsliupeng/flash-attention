@@ -352,19 +352,19 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
             Tensor tOrO = partition_fragment_C(tiled_mma1, select<0, 2>(TileShape_MNK{}));
             flash::Softmax<2 * (2 * kBlockM / NumMmaThreads), Use_max_offset> softmax; // 2 * (2 * 128 / 256) = 2
 
-#ifdef C_DEBUG
-    if (cute::thread(0+NumCopyThreads+32)) {
-    // if (cute::block0()) {
-        // ptr[32b](0x7f0ebdfff710) o ((_2,_2,_32),_1,_2):((_1,_2,_4),_0,_128)
-        cute::print("\t tOrO: "); cute::print(tOrO); cute::print("\n");
-        // ptr[32b](0x7f7f99fffaa0) o ((_2,_2,_16),_1,_1):((_1,_2,_4),_0,_0)
-        cute::print("\t tSrS: "); cute::print(partition_fragment_C(tiled_mma0, select<0, 1>(TileShape_MNK{}))); cute::print("\n");
-        // ptr[32b](0x7fb58dfffb80) o (_2):(_1)
-        cute::print("\t softmax.row_max: "); cute::print(softmax.row_max); cute::print("\n");
-        //  (_2):(_1)
-        cute::print("\t softmax.row_sum: "); cute::print(softmax.row_sum); cute::print("\n");
-    }
-#endif
+// #ifdef C_DEBUG
+//     if (cute::thread(0+NumCopyThreads+32)) {
+//     // if (cute::block0()) {
+//         // ptr[32b](0x7f0ebdfff710) o ((_2,_2,_32),_1,_2):((_1,_2,_4),_0,_128)
+//         cute::print("\t tOrO: "); cute::print(tOrO); cute::print("\n");
+//         // ptr[32b](0x7f7f99fffaa0) o ((_2,_2,_16),_1,_1):((_1,_2,_4),_0,_0)
+//         cute::print("\t tSrS: "); cute::print(partition_fragment_C(tiled_mma0, select<0, 1>(TileShape_MNK{}))); cute::print("\n");
+//         // ptr[32b](0x7fb58dfffb80) o (_2):(_1)
+//         cute::print("\t softmax.row_max: "); cute::print(softmax.row_max); cute::print("\n");
+//         //  (_2):(_1)
+//         cute::print("\t softmax.row_sum: "); cute::print(softmax.row_sum); cute::print("\n");
+//     }
+// #endif
 
             auto block_coord = work_tile_info.get_block_coord(scheduler_params);
             auto [m_block, bidh, bidb] = block_coord;
