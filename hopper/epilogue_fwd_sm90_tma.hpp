@@ -55,20 +55,20 @@ struct CollectiveEpilogueFwd {
     // These are for storing the output tensor without TMA (e.g., for setting output to zero and var-seq-len)
     static constexpr int kNumVecElem = ceil_div(128, sizeof_bits_v<Element>); // 128 / 16 = 8
     static_assert(kHeadDim % kNumVecElem == 0);
-    static constexpr int kNumThreadsPerRow = kHeadDim / kNumVecElem; // 256 / 8
+    static constexpr int kNumThreadsPerRow = kHeadDim / kNumVecElem; // 256 / 8 = 32
     static_assert(NumMmaThreads % kNumThreadsPerRow == 0); // 
-    static constexpr int kNumRows = NumMmaThreads / kNumThreadsPerRow; // 
+    static constexpr int kNumRows = NumMmaThreads / kNumThreadsPerRow; // 256 / 32 = 8
     using TiledCopyOAtom = cute::Copy_Atom<cute::UniversalCopy<cutlass::uint128_t>, Element>;
     using TiledCopyOThrLayout = decltype(cute::make_layout(
-        cute::make_shape(Int<kNumRows>{}, Int<kNumThreadsPerRow>{}),
+        cute::make_shape(Int<kNumRows>{}, Int<kNumThreadsPerRow>{}), // 8, 32
         LayoutRight{}));
     using TiledCopyOValLayout = decltype(cute::make_layout(
-        cute::make_shape(_1{}, Int<kNumVecElem>{}),
+        cute::make_shape(_1{}, Int<kNumVecElem>{}), // (1, 8)
         LayoutRight{}));
     using TiledCopyO = decltype(make_tiled_copy(
         TiledCopyOAtom{},
-        TiledCopyOThrLayout{}, // Thr layout
-        TiledCopyOValLayout{} // Val layout
+        TiledCopyOThrLayout{}, // Thr layout (8, 32)
+        TiledCopyOValLayout{} // Val layout  (1, 8)
     ));
 
     // used for rmem -> smem O copy in fp8 kernel to undo column permutation

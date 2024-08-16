@@ -144,6 +144,7 @@ __forceinline__ __device__ auto convert_layout_acc_Aregs(Layout acc_layout) {
 };
 
 // Convert acc_layout from ((2, 2, N / 8), MMA_M, MMA_N) to ((4, 2, 2), MMA_M, (N / 32, MMA_N))
+// ((_2,_2,_16), 1, 1) -> ((4, 2, 2), 1, (4, 1))
 template<typename Layout>
 __forceinline__ __device__ auto convert_layout_acc_Aregs_fp8(Layout acc_layout) {
     using X = Underscore;    
@@ -151,7 +152,7 @@ __forceinline__ __device__ auto convert_layout_acc_Aregs_fp8(Layout acc_layout) 
     static_assert(decltype(size<0, 1>(acc_layout))::value == 2);
     static_assert(decltype(rank(acc_layout))::value == 3);
     static_assert(decltype(rank(get<0>(acc_layout)))::value == 3);
-    auto l = logical_divide(get<0>(acc_layout), Shape<X, X, _4>{});  // (2, 2, (2, N / 32)))    
+    auto l = logical_divide(get<0>(acc_layout), Shape<X, X, _4>{});  // (2, 2, (4, N / 32)))    
     return make_layout(make_layout(Shape<_4, _2, _2>{}),
                        get<1>(acc_layout),
                        make_layout(get<2, 1>(l), get<2>(acc_layout)));

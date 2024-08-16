@@ -275,10 +275,10 @@ void run_mha_fwd_hdim512_fp8(Flash_fwd_params &params, cudaStream_t stream) {
 // template<typename T>
 // void run_mha_fwd_hdim576_fp8(Flash_fwd_params &params, cudaStream_t stream) {
 //     constexpr static int Headdim = 576; 
-//     constexpr static int kBlockM = 64;
+//     constexpr static int kBlockM = 128;
 //     constexpr static int kBlockN = 64;
 //     constexpr static int kNWarps = 12;
-//     constexpr static int kStages = 2;    
+//     constexpr static int kStages = 1;    
 //     BOOL_SWITCH(params.is_causal, Is_causal, [&] {
 //         SEQLEN_SWITCH(params.cu_seqlens_q, Seqlen_traits, [&] {
 //             // Only use Cluster if number of tiles along seqlen_q is even
