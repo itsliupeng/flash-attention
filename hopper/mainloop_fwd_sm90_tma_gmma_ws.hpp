@@ -127,7 +127,7 @@ struct CollectiveMainloopFwd {
             repeat_like(typename Seqlen_traits::StrideT{}, int32_t(0)),
             typename Seqlen_traits::StrideT{}
         ),
-        take<0, 2>(SmemLayoutK{}), // !!! Using k instead
+        take<0, 2>(SmemLayoutV{}),
         select<1, 2>(TileShape_MNK{}),
         size<0>(ClusterShape{}))); // mcast along M mode for this N load, if any
 
@@ -200,7 +200,7 @@ struct CollectiveMainloopFwd {
         TMA_V tma_load_V = make_tma_copy(
             GmemTiledCopyKV{},
             mV,
-            SmemLayoutK{}(_, _, _0{}),
+            SmemLayoutV{}(_, _, _0{}),
             select<1, 2>(TileShape_MNK{}),
             size<0>(ClusterShape{})); // mcast along M mode for this N load, if any
         return {args.layout_Q, args.layout_K, args.layout_V,
@@ -415,8 +415,8 @@ struct CollectiveMainloopFwd {
                                           group_modes<0, 2>(sQ_x), group_modes<0, 2>(gQ_x));  // (TMA), (TMA)
         auto [tKgK, tKsK] = tma_partition(mainloop_params.tma_load_K, block_rank_in_cluster, Layout<ClusterShape>{},
                                           group_modes<0, 2>(sK), group_modes<0, 2>(gK));  // (TMA, k), (TMA, PIPE)
-        // auto [tVgV, tVsV] = tma_partition(mainloop_params.tma_load_V, block_rank_in_cluster, Layout<ClusterShape>{},
-        //                                   group_modes<0, 2>(sV), group_modes<0, 2>(gV));  // (TMA, k), (TMA, PIPE)
+        auto [tVgV, tVsV] = tma_partition(mainloop_params.tma_load_V, block_rank_in_cluster, Layout<ClusterShape>{},
+                                          group_modes<0, 2>(sV), group_modes<0, 2>(gV));  // (TMA, k), (TMA, PIPE)
 
         uint16_t mcast_mask_kv = 0;
         if constexpr (cute::is_same_v<GmemTiledCopyKV, SM90_TMA_LOAD_MULTICAST>) {
