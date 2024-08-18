@@ -8,7 +8,7 @@ N = 32
 # H = 256
 B, H, S = 8, 256, 128
 
-is_causal = True
+is_causal = False
 print(f"is_causal: {is_causal}")
 
 print(">>>>> MHA")
