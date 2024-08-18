@@ -36,6 +36,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
     using ElementAccum = typename Ktraits::ElementAccum;
     using SoftType = ElementAccum;
     using TileShape_MNK = typename Ktraits::TileShape_MNK;
+    using Mma1_TileShape_MNK = typename Ktraits::Mma1_TileShape_MNK;
     using ClusterShape = typename Ktraits::ClusterShape_MNK;
 
     static_assert(Ktraits::Is_WS);
@@ -163,7 +164,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
              work_tile_info.is_valid(scheduler_params);
              work_tile_info = scheduler.template get_next_work</*IsProducer=*/false>(scheduler_params, work_tile_info)) {
             // Attention output (GEMM-II) accumulator.
-            Tensor tOrO = partition_fragment_C(tiled_mma1, select<0, 2>(TileShape_MNK{})); // (M, K)
+            Tensor tOrO = partition_fragment_C(tiled_mma1, select<0, 1>(Mma1_TileShape_MNK{})); // (M, K)
             flash::Softmax<2 * (2 * kBlockM / NumMmaThreads)> softmax; // 128 / 256
 
             auto block_coord = work_tile_info.get_block_coord(scheduler_params);
@@ -208,6 +209,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
     using ElementAccum = typename Ktraits::ElementAccum;
     using SoftType = ElementAccum;
     using TileShape_MNK = typename Ktraits::TileShape_MNK;
+    using Mma1_TileShape_MNK = typename Ktraits::Mma1_TileShape_MNK;
     using ClusterShape = typename Ktraits::ClusterShape_MNK;
 
     static_assert(Ktraits::Is_WS);
@@ -349,7 +351,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
              work_tile_info.is_valid(scheduler_params);
              work_tile_info = scheduler.template get_next_work</*IsProducer=*/false>(scheduler_params, work_tile_info)) {
             // Attention output (GEMM-II) accumulator.
-            Tensor tOrO = partition_fragment_C(tiled_mma1, select<0, 2>(TileShape_MNK{}));
+            Tensor tOrO = partition_fragment_C(tiled_mma1, select<0, 1>(Mma1_TileShape_MNK{}));
             flash::Softmax<2 * (2 * kBlockM / NumMmaThreads), Use_max_offset> softmax; // 2 * (2 * 128 / 256) = 2
 
 // #ifdef C_DEBUG
