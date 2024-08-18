@@ -147,7 +147,7 @@ if not SKIP_CUDA_BUILD:
         "flash_fwd_hdim128_e4m3_sm90.cu",
         "flash_fwd_hdim256_e4m3_sm90.cu",
         "flash_fwd_hdim512_e4m3_sm90.cu",
-        # "flash_fwd_hdim576_e4m3_sm90.cu",
+        "flash_fwd_hdim576_e4m3_sm90.cu",
     ]
     nvcc_flags = [
         "-O3",

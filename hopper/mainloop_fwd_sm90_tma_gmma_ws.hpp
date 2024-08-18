@@ -127,7 +127,7 @@ struct CollectiveMainloopFwd {
             repeat_like(typename Seqlen_traits::StrideT{}, int32_t(0)),
             typename Seqlen_traits::StrideT{}
         ),
-        take<0, 2>(SmemLayoutV{}),
+        take<0, 2>(SmemLayoutK{}),
         select<1, 2>(TileShape_MNK{}),
         size<0>(ClusterShape{}))); // mcast along M mode for this N load, if any
 
@@ -200,7 +200,7 @@ struct CollectiveMainloopFwd {
         TMA_V tma_load_V = make_tma_copy(
             GmemTiledCopyKV{},
             mV,
-            SmemLayoutV{}(_, _, _0{}),
+            SmemLayoutK{}(_, _, _0{}),
             select<1, 2>(TileShape_MNK{}),
             size<0>(ClusterShape{})); // mcast along M mode for this N load, if any
         return {args.layout_Q, args.layout_K, args.layout_V,
@@ -372,7 +372,7 @@ struct CollectiveMainloopFwd {
 
         Tensor sQ = make_tensor(make_smem_ptr(shared_storage.smem_q.data()), SmemLayoutQ{});
         // Tensor sK = make_tensor(make_smem_ptr(shared_storage.smem_v.smem_v.data()), SmemLayoutK{});
-        Tensor sV = make_tensor(make_smem_ptr(shared_storage.smem_v.smem_v.data()), SmemLayoutV{});
+        Tensor sV = make_tensor(make_smem_ptr(shared_storage.smem_v.smem_v.data()), SmemLayoutK{});
         Tensor sK = sV;
         
         Tensor sV_divide = as_position_independent_swizzle_tensor(make_tensor(make_smem_ptr(shared_storage.smem_v.smem_v.data()), SmemLayoutTransposeV{}));

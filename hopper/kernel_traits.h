@@ -56,20 +56,20 @@ struct SharedStorageQKVO {
 // };
 
 // 定义新的结构体来包含 smem_v 和 smem_v_out
-template <class Gemm2Type, class SmemLayoutV>
+template <class Gemm2Type, class SmemLayoutK, class SmemLayoutVt>
 struct SmemVVout {
-    cute::array_aligned<Gemm2Type, cute::cosize_v<SmemLayoutV>> smem_v;
-    cute::array_aligned<Gemm2Type, cute::cosize_v<SmemLayoutV>> smem_v_out;
+    cute::array_aligned<Gemm2Type, cute::cosize_v<SmemLayoutK>> smem_v;
+    cute::array_aligned<Gemm2Type, cute::cosize_v<SmemLayoutVt>> smem_v_out;
 };
 
 template <int kStages, class Gemm1Type, class Gemm2Type, class OutputType, class SmemLayoutQ,
-          class SmemLayoutK, class SmemLayoutV, class SmemLayoutO>
+          class SmemLayoutK, class SmemLayoutVt, class SmemLayoutO>
 struct SharedStorageQKVOVt {
     struct {
         cute::array_aligned<Gemm1Type, cute::cosize_v<SmemLayoutQ>> smem_q;
         // 创建一个包含 SmemVVout 和 smem_o 的 union
         union {
-            SmemVVout<Gemm2Type, SmemLayoutV> smem_v;
+            SmemVVout<Gemm2Type, SmemLayoutK, SmemLayoutVt> smem_v;
             cute::array_aligned<OutputType, cute::cosize_v<SmemLayoutO>> smem_o;
         };
     };
@@ -295,7 +295,8 @@ struct Flash_fwd_kernel_traits_fp8 {
     // Sw<2,4,3> o smem_ptr[8b](unset) o (_256,(_64,_2),_2):(_64,(_1,_16384),_32768)
     using SmemLayoutVt =
         decltype(tile_to_shape(SmemLayoutAtomVt{},
-                 make_shape(shape<2>(TileShape_MNK{}), shape<1>(TileShape_MNK{}), Int<kStages>{}))); // (K, N, 2)
+                make_shape(shape<1>(Mma1_TileShape_MNK{}), shape<2>(Mma1_TileShape_MNK{}), Int<kStages>{}))); // (K, N, 2)
+                //  make_shape(shape<2>(TileShape_MNK{}), shape<1>(TileShape_MNK{}), Int<kStages>{}))); // (K, N, 2)
 
     // for fp8 in-kernel transpose -- dst layout
     // Sw<2,4,3> o smem_ptr[8b](unset) o ((_64,_2),_256,_2):((_1,_16384),_64,_32768)
@@ -330,7 +331,7 @@ struct Flash_fwd_kernel_traits_fp8 {
     using SmemCopyAtomQ = Copy_Atom<cute::SM75_U32x4_LDSM_N, Element>;
 
     using SharedStorage = SharedStorageQKVOVt<kStages, Element, Element, OutputType, SmemLayoutQ,
-                          SmemLayoutK, SmemLayoutV, SmemLayoutO>;
+                          SmemLayoutK, SmemLayoutVt, SmemLayoutO>;
 
     using MainloopPipeline = typename cutlass::PipelineTmaAsync<kStages>;
     using MainloopPipelineNoTMA = typename cutlass::PipelineAsync<kStages>;
