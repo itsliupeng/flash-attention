@@ -238,7 +238,12 @@ mha_fwd(at::Tensor &q,         // batch_size x seqlen_q x num_heads x head_size
 
     CHECK_SHAPE(q, batch_size, seqlen_q, num_heads, head_size_og);
     CHECK_SHAPE(k, batch_size, seqlen_k, num_heads_k, head_size_og);
-    CHECK_SHAPE(v, batch_size, seqlen_k, num_heads_k, head_size_og);
+    // if (head_size_og == 576) {
+    //     CHECK_SHAPE(v, batch_size, seqlen_k, num_heads_k, 512);
+    // } else{
+    //     CHECK_SHAPE(v, batch_size, seqlen_k, num_heads_k, head_size_og);
+    // }
+
 
     at::Tensor q_padded, k_padded, v_padded;
     if (head_size_og % 8 != 0) {
@@ -262,13 +267,18 @@ mha_fwd(at::Tensor &q,         // batch_size x seqlen_q x num_heads x head_size
                 "not fp8, or fp16 for fp8 input.");
         CHECK_DEVICE(out);
         TORCH_CHECK(out.stride(-1) == 1, "Output tensor must have contiguous last dimension");
-        CHECK_SHAPE(out, batch_size, seqlen_q, num_heads, head_size_og);
-        if (head_size_og % 8 != 0) { out = torch::empty_like(q_padded); }
+        if (head_size_og == 576) {
+            CHECK_SHAPE(out, batch_size, seqlen_q, num_heads, 512);
+        } else{
+            CHECK_SHAPE(out, batch_size, seqlen_q, num_heads, head_size_og);
+        }
+        // CHECK_SHAPE(out, batch_size, seqlen_q, num_heads, head_size_og);
+        // if (head_size_og % 8 != 0) { out = torch::empty_like(q_padded); }
     } else {
         if (q_dtype == at::ScalarType::Float8_e4m3fn)
-            out = torch::empty_like(q_padded, at::kHalf);
+            out = torch::empty({batch_size, seqlen_q, num_heads, head_size_og}, at::kHalf);
         else
-            out = torch::empty_like(q_padded);
+            out = torch::empty({batch_size, seqlen_q, num_heads, head_size_og}, q.dtype());
     }
 
     auto round_multiple = [](int x, int m) { return (x + m - 1) / m * m; };
@@ -343,8 +353,8 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
     TORCH_CHECK(is_sm90, "FlashAttention only supports Hopper GPUs or newer.");
 
     auto q_dtype = q.dtype();
-    TORCH_CHECK(q_dtype == torch::kFloat16 || q_dtype == torch::kBFloat16,
-                "FlashAttention only support fp16 and bf16 data type");
+    // TORCH_CHECK(q_dtype == torch::kFloat16 || q_dtype == torch::kBFloat16,
+    //             "FlashAttention only support fp16 and bf16 data type");
     TORCH_CHECK(k.dtype() == q_dtype, "query and key must have the same dtype");
     TORCH_CHECK(v.dtype() == q_dtype, "query and value must have the same dtype");
     TORCH_CHECK(cu_seqlens_q.dtype() == torch::kInt32, "cu_seqlens_q must have dtype int32");

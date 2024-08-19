@@ -9,12 +9,12 @@ int main(int argc, const char *argv[]) {
     int num_heads = 16;
     // int head_size = 256;
     int head_size = 576;
+    int out_head_size = 512;
     auto options = torch::TensorOptions().device(torch::kCUDA).dtype(torch::kHalf);
-    // auto options = torch::TensorOptions().device(torch::kCUDA).dtype(at::ScalarType::Float8_e4m3fn);
-    at::Tensor q = torch::randn({batch_size, seqlen_q, num_heads, head_size},  options).to(torch::kFloat8_e4m3fn);
-    at::Tensor k = torch::randn({batch_size, seqlen_q, num_heads, head_size},  options).to(torch::kFloat8_e4m3fn);
-    at::Tensor v = torch::randn({batch_size, seqlen_q, num_heads, head_size}, options).to(torch::kFloat8_e4m3fn);
-    at::Tensor o = torch::randn({batch_size, seqlen_q, num_heads, head_size},  options);
+    at::Tensor q = torch::randn({batch_size, seqlen_q, num_heads, head_size}, options).to(torch::kFloat8_e4m3fn);
+    at::Tensor k = torch::randn({batch_size, seqlen_q, num_heads, head_size}, options).to(torch::kFloat8_e4m3fn);
+    at::Tensor v = k;
+    at::Tensor o = torch::randn({batch_size, seqlen_q, num_heads, out_head_size},  options);
     std::cout << q.sizes() << " " << q.device().type() << " " << q.layout() << std::endl;
 
     // Prepare the optional tensors for output and alibi slopes
@@ -30,15 +30,6 @@ int main(int argc, const char *argv[]) {
     bool return_softmax = false;  // Assuming we don't need to return softmax scores
     c10::optional<at::Generator> gen_ = c10::nullopt;  // Assuming no specific generator needed
 
-
-// mha_fwd(at::Tensor &q,         // batch_size x seqlen_q x num_heads x head_size
-//         const at::Tensor &k,         // batch_size x seqlen_k x num_heads_k x head_size
-//         const at::Tensor &v,         // batch_size x seqlen_k x num_heads_k x head_size
-//         c10::optional<at::Tensor> &out_,             // batch_size x seqlen_q x num_heads x head_size
-//         const float softmax_scale,
-//         bool is_causal);
-
-    // Call the function
     std::vector<at::Tensor> result = mha_fwd(q, k, v, out_, softmax_scale, is_causal);
 
     std::cout << out_.value().sizes() << std::endl;
