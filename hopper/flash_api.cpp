@@ -276,9 +276,9 @@ mha_fwd(at::Tensor &q,         // batch_size x seqlen_q x num_heads x head_size
         // if (head_size_og % 8 != 0) { out = torch::empty_like(q_padded); }
     } else {
         if (q_dtype == at::ScalarType::Float8_e4m3fn)
-            out = torch::empty({batch_size, seqlen_q, num_heads, head_size_og}, at::kHalf);
+            out = torch::empty({batch_size, seqlen_q, num_heads, head_size_og}, q.options().dtype(at::kHalf));
         else
-            out = torch::empty({batch_size, seqlen_q, num_heads, head_size_og}, q.dtype());
+            out = torch::empty({batch_size, seqlen_q, num_heads, head_size_og}, q.options());
     }
 
     auto round_multiple = [](int x, int m) { return (x + m - 1) / m * m; };
@@ -375,6 +375,10 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
     const int batch_size = cu_seqlens_q.numel() - 1;
     int num_heads = sizes[1];
     const int head_size_og = sizes[2];
+    int o_head_size_og = head_size_og;
+    if (head_size_og == 576) {
+        o_head_size_og = 512;
+    }
     const int num_heads_k = k.size(1);
 
     int window_size_left = -1;
@@ -395,7 +399,7 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
     CHECK_SHAPE(q, total_q, num_heads, head_size_og);
     const int total_k = k.size(0);
     CHECK_SHAPE(k, total_k, num_heads_k, head_size_og);
-    CHECK_SHAPE(v, total_k, num_heads_k, head_size_og);
+    // CHECK_SHAPE(v, total_k, num_heads_k, head_size_og);
 
     CHECK_SHAPE(cu_seqlens_q, batch_size + 1);
     CHECK_SHAPE(cu_seqlens_k, batch_size + 1);
@@ -424,10 +428,13 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
         TORCH_CHECK(out.dtype() == q_dtype, "Output must have the same dtype as inputs");
         CHECK_DEVICE(out);
         TORCH_CHECK(out.stride(-1) == 1, "Output tensor must have contiguous last dimension");
-        CHECK_SHAPE(out, sizes[0], sizes[1], head_size_og);
+        CHECK_SHAPE(out, sizes[0], sizes[1], o_head_size_og);
         if (head_size_og % 8 != 0) { out = torch::empty_like(q_padded); }
     } else {
-        out = torch::empty_like(q_padded);
+        if (q_dtype == at::ScalarType::Float8_e4m3fn)
+            out = torch::empty({total_q, num_heads, o_head_size_og}, q.options().dtype(at::kHalf));
+        else
+            out = torch::empty({total_q, num_heads, o_head_size_og}, q.options());
     }
 
     auto round_multiple = [](int x, int m) { return (x + m - 1) / m * m; };
