@@ -96,6 +96,7 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
     //     ValLayoutRef: (_1,_5120):(_0,_1)
     //     ValueType:    16b
     mainloop_params.print();
+    
 #endif
     typename CollectiveEpilogue::Params epilogue_params =
         CollectiveEpilogue::to_underlying_arguments({
@@ -132,6 +133,7 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
     kernel_traits.print();
     Seqlen_traits seqlen_traits;
     seqlen_traits.print();
+    CollectiveEpilogue::print();
 #endif
     if (smem_size >= 48 * 1024) {
        CHECK_CUDA(cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));

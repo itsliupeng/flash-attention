@@ -24,7 +24,7 @@ struct CollectiveEpilogueFwd {
     static constexpr int kBlockM = Ktraits::kBlockM;
     static constexpr int kBlockN = Ktraits::kBlockN;
     static constexpr int kHeadDim = Ktraits::kHeadDim == 576 ? 512 : Ktraits::kHeadDim;
-    using TileShape_MNK = Shape<Int<kBlockM>, Int<kBlockN>, Int<kHeadDim>>;
+    using TileShape_MNK = Shape<Int<kBlockM>, Int<kBlockN>, Int<kHeadDim>>; //  (_128,_64,_512)
 
     static constexpr int kNWarps = Ktraits::kNWarps;
     static constexpr int kNThreads = kNWarps * cutlass::NumThreadsPerWarp;
@@ -55,30 +55,41 @@ struct CollectiveEpilogueFwd {
     // These are for storing the output tensor without TMA (e.g., for setting output to zero and var-seq-len)
     static constexpr int kNumVecElem = ceil_div(128, sizeof_bits_v<Element>); // 128 / 16 = 8
     static_assert(kHeadDim % kNumVecElem == 0);
-    static constexpr int kNumThreadsPerRow = kHeadDim / kNumVecElem; // 256 / 8 = 32
-    static_assert(NumMmaThreads % kNumThreadsPerRow == 0); // 
-    static constexpr int kNumRows = NumMmaThreads / kNumThreadsPerRow; // 256 / 32 = 8
+    static constexpr int kNumThreadsPerRow = kHeadDim / kNumVecElem; // 512 / 8 = 64
+    static_assert(NumMmaThreads % kNumThreadsPerRow == 0);
+    static constexpr int kNumRows = NumMmaThreads / kNumThreadsPerRow; // 256 / 64 = 4
     using TiledCopyOAtom = cute::Copy_Atom<cute::UniversalCopy<cutlass::uint128_t>, Element>;
     using TiledCopyOThrLayout = decltype(cute::make_layout(
-        cute::make_shape(Int<kNumRows>{}, Int<kNumThreadsPerRow>{}), // 8, 32
+        cute::make_shape(Int<kNumRows>{}, Int<kNumThreadsPerRow>{}), // 4, 64
         LayoutRight{}));
     using TiledCopyOValLayout = decltype(cute::make_layout(
         cute::make_shape(_1{}, Int<kNumVecElem>{}), // (1, 8)
         LayoutRight{}));
+	// TiledCopyO: TiledCopy
+    //     Tiler_MN:       (_4,_512)
+    //     TiledLayout_TV: ((_64,_4),_8):((_32,_1),_4)
+    //     Copy_Atom
+    //     ThrID:        _1:_0
+    //     ValLayoutSrc: (_1,_8):(_0,_1)
+    //     ValLayoutDst: (_1,_8):(_0,_1)
+    //     ValLayoutRef: (_1,_8):(_0,_1)
+    //     ValueType:    16b
     using TiledCopyO = decltype(make_tiled_copy(
         TiledCopyOAtom{},
-        TiledCopyOThrLayout{}, // Thr layout (8, 32)
+        TiledCopyOThrLayout{}, // Thr layout (4, 64)
         TiledCopyOValLayout{} // Val layout  (1, 8)
     ));
 
     // used for rmem -> smem O copy in fp8 kernel to undo column permutation
-    using ThreadLayoutrO = Layout<Shape<_8, Int<kBlockM/16>, _4, _1>,
+    using ThreadLayoutrO = Layout<Shape<_8, Int<kBlockM/16>, _4, _1>, // (8, 128/16, 4) = 256
                                  Stride<_4, _32, _1, _0>>;
-    using ValueLayoutrO = Layout<Shape<_1, _2, Shape<_2, _2>, Int<kHeadDim/16>>,
+    using ValueLayoutrO = Layout<Shape<_1, _2, Shape<_2, _2>, Int<kHeadDim/16>>, // (1, 2, (2, 2), 32)
                                 Stride<_0, _2, Stride<_4, _1>, _8>>;
     using TiledCopyrO = decltype(make_tiled_copy(Copy_Atom<UniversalCopy<uint16_t>, Element>{},
                       ThreadLayoutrO{}, ValueLayoutrO{}));
-    using TiledCopyShaperO = Shape<_8, Int<kBlockM/8>, _16, Int<kHeadDim/16>>;
+    using TiledCopyShaperO = Shape<_8, Int<kBlockM/8>, _16, Int<kHeadDim/16>>; // (8, 16, 16, 32)
+    // Sw<3,4,3> o smem_ptr[16b](unset) o (_128,(_64,_8)):(_64,(_1,_8192))
+    // Sw<3,4,3> o smem_ptr[16b](unset) o (_8,_16,_16,(_4,_8)):(_64,_512,_1,(_16,_8192))
     using SmemLayoutrO = decltype(composition(SmemLayoutO{}, Layout<TiledCopyShaperO>{}));
 
     // Host side kernel arguments
@@ -98,9 +109,11 @@ struct CollectiveEpilogueFwd {
         TMA_O tma_store_O;
     };
 
-    void print() const {
+    static void print() {
         cute::print(">>>>> CollectiveEpilogueFwd\n");
         cute::print("\t TileShape_MNK: "); cute::print(TileShape_MNK{}); cute::print("\n");
+        cute::print("\t TiledCopyO: "); cute::print(TiledCopyO{}); cute::print("\n");
+        cute::print("\t SmemLayoutrO: "); cute::print(SmemLayoutrO{}); cute::print("\n");
         cute::print("<<<<< CollectiveEpilogueFwd\n");
     }
 
