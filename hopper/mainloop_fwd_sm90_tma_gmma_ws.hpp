@@ -370,8 +370,10 @@ struct CollectiveMainloopFwd {
         // Sw<2,4,3> o smem_ptr[8b](unset) o (((_16,_4),(_8,_8)),_1,_8,_1):(((_1,_16),(_64,_512)),_0,_4096,_0)
         using SmemLayoutTransposeVt = typename Ktraits::SmemLayoutTransposeVt;
 
+        // SmemLayoutQ: Sw<2,4,3> o smem_ptr[8b](unset) o (_128,(_64,_9)):(_64,(_1,_8192))
         Tensor sQ = make_tensor(make_smem_ptr(shared_storage.smem_q.data()), SmemLayoutQ{});
         // Tensor sK = make_tensor(make_smem_ptr(shared_storage.smem_v.smem_v.data()), SmemLayoutK{});
+        // SmemLayoutK: Sw<2,4,3> o smem_ptr[8b](unset) o (_64,(_64,_9),_2):(_64,(_1,_4096),_36864)
         Tensor sV = make_tensor(make_smem_ptr(shared_storage.smem_v.smem_v.data()), SmemLayoutK{});
         Tensor sK = sV;
         

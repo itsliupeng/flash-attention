@@ -57,8 +57,8 @@ void set_params_fprop(Flash_fwd_params &params,
     params.k_ptr = k.data_ptr();
     params.v_ptr = v.data_ptr();
     // All stride are in elements, not bytes.
-    params.q_row_stride = q.stride(-3);
-    params.k_row_stride = k.stride(-3);
+    params.q_row_stride = q.stride(-3); // (total_q, num_heads, head_size_og)
+    params.k_row_stride = k.stride(-3); // (num_blocks, page_block_size, num_heads_k, head_size_og)
     params.v_row_stride = v.stride(-3);
     params.q_head_stride = q.stride(-2);
     params.k_head_stride = k.stride(-2);
@@ -665,6 +665,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("fwd", &mha_fwd, "Forward pass");
     // m.def("bwd", &mha_bwd, "Backward pass");
     m.def("varlen_fwd", &mha_varlen_fwd, "Forward pass (variable length)");
+    m.def("kvcache_fwd", &mha_kvcache_fwd, "Forward pass (variable length)");
     // m.def("varlen_bwd", &mha_varlen_bwd, "Varlen backward pass");
 }
 #endif

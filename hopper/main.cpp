@@ -8,12 +8,13 @@ int main(int argc, const char *argv[]) {
     int seqlen_q = 128;
     int seqlen = 128;
     int num_heads = 16;
+    int num_heads_k = 1;
     // int head_size = 256;
     int head_size = 576;
     int out_head_size = 512;
     auto options = torch::TensorOptions().device(torch::kCUDA).dtype(torch::kHalf);
     at::Tensor q = torch::randn({batch_size * seqlen_q, num_heads, head_size}, options).to(torch::kFloat8_e4m3fn);
-    at::Tensor k = torch::randn({batch_size * seqlen, num_heads, head_size}, options).to(torch::kFloat8_e4m3fn);
+    at::Tensor k = torch::randn({batch_size * seqlen, num_heads_k, head_size}, options).to(torch::kFloat8_e4m3fn);
     at::Tensor v = k;
     // at::Tensor o = torch::randn({batch_size, seqlen_q, num_heads, out_head_size},  options);
     std::cout << q.sizes() << " " << q.device().type() << " " << q.layout() << std::endl;

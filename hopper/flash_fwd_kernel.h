@@ -332,7 +332,8 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
         }
         collective_mainloop.load_tail_one_write(pipeline_k, pipeline_k, smem_pipe_write);
     } else {  // Consumer
-        cutlass::arch::warpgroup_reg_alloc<Ktraits::kNWarps == 12 ? 232 : 160>();        
+        // cutlass::arch::warpgroup_reg_alloc<Ktraits::kNWarps == 12 ? 232 : 160>();        
+        cutlass::arch::warpgroup_reg_alloc<Ktraits::kNWarps == 12 ? 248 : 160>();        
 
         TileScheduler scheduler(&shared_storage.tile_count_semaphore);
         // Initialize matmul objects.
