@@ -80,6 +80,7 @@ struct SharedStorageQKVOVt {
         // typename cutlass::PipelineTmaAsync<kStages>::SharedStorage pipeline_v;
         typename cutlass::PipelineAsync<kStages>::SharedStorage pipeline_vt;
         int tile_count_semaphore;
+        cute::TmaDescriptor smem_k_tensormap;
     };
 };
 

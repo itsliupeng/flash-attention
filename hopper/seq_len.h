@@ -147,7 +147,7 @@ CUTLASS_DEVICE auto VarSeqLenTraits::get_local_tile_tensor(
     const MTensor &m_tensor, const Shape &tile_shape,
     int bidh, int bidb, bool padded) const {
   auto g_offset = local_tile(
-      m_tensor(_, _, bidh), 
+      m_tensor(_, _, bidh),  //  (s, h)
       cute::make_shape(1, get<1>(tile_shape)), 
       make_coord(cu_seq_len[bidb] + (padded ? kMaxTileSize * bidb : 0), _0{}));
   auto g_sequence = make_tensor(

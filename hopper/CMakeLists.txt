@@ -29,7 +29,7 @@ set(CMAKE_CUDA_ARCHITECTURES 90a)
 # set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O0 -g -G")
 # set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O0 -lineinfo --expt-relaxed-constexpr --use_fast_math -gencode arch=compute_90a,code=sm_90a")
 # set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O0 -g  -lineinfo --expt-relaxed-constexpr --use_fast_math -gencode arch=compute_90a,code=sm_90a")
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3 --expt-relaxed-constexpr --use_fast_math -gencode arch=compute_90a,code=sm_90a")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O0 --expt-relaxed-constexpr --use_fast_math -gencode arch=compute_90a,code=sm_90a")
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --ptxas-options=--verbose,--warn-on-local-memory-usage -Xnvlink=--verbose -Xptxas=--verbose")
 
 # Python settings

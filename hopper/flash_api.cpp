@@ -493,7 +493,7 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
 
 
 std::vector<at::Tensor>
-mha_kvcache_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \sum_{i=0}^{b} s_i
+mla_cache_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \sum_{i=0}^{b} s_i
                const at::Tensor &kcache,  // total_k x num_heads_k x head_size, total_k := \sum_{i=0}^{b} s_i or num_blocks x page_block_size x num_heads_k x head_size if there's a block_table.
                const at::Tensor &vcache,  // total_k x num_heads_k x head_size, total_k := \sum_{i=0}^{b} s_i or num_blocks x page_block_size x num_heads_k x head_size if there's a block_table.
                c10::optional<at::Tensor> &out_, // total_q x num_heads x head_size, total_k := \sum_{i=0}^{b} s_i
@@ -665,7 +665,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("fwd", &mha_fwd, "Forward pass");
     // m.def("bwd", &mha_bwd, "Backward pass");
     m.def("varlen_fwd", &mha_varlen_fwd, "Forward pass (variable length)");
-    m.def("kvcache_fwd", &mha_kvcache_fwd, "Forward pass (variable length)");
+    m.def("mla_fwd", &mla_cache_fwd, "Forward pass (MLA)");
     // m.def("varlen_bwd", &mha_varlen_bwd, "Varlen backward pass");
 }
 #endif

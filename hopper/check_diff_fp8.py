@@ -33,8 +33,8 @@ for S in [128, 512, 1024]:
     for H in [128, 256]:
     # for H in [512, 576]:
         for B in [8, 16, 32, 64]:
-            q = torch.rand(B, S, N, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
-            k = torch.rand(B, S, N, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
+            q = torch.rand(B, N, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
+            k = torch.rand(B, S, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
             # q = torch.rand(B, 1, N, H, dtype=torch.float16, device="cuda")
             # k = torch.rand(B, S, 1, H, dtype=torch.float16, device="cuda")          
             v = k.clone()
