@@ -195,20 +195,16 @@ struct CollectiveMainloopFwd {
         cp_async_wait<0>();
     }
 
-    CUTLASS_DEVICE auto
+    CUTLASS_DEVICE void
     load_init(Params const& params, int32_t const sm_count, int32_t const sm_idx) const {
         // Initialize tma for loading
-        cute::TmaDescriptor* tma_load_K_page = nullptr;
-        // todo: need cudaFree
-        // cudaMalloc(&tma_load_K_page, sizeof(cute::TmaDescriptor));
-        // if (cute::elect_one_sync()) {
-        //     // Bringing tensormaps from params to gmem for modification later
-        //     // ptr[1024b](0x7f0d4de00000) o _1:_1
-        //     Tensor pC_tensormap = make_tensor(params.tma_load_K.get_tma_descriptor(), Int<1>{}, Int<1>{});
-        //     Tensor gC_tensormap = make_tensor(tma_load_K_page, Int<1>{}, Int<1>{});
-        //     copy(recast<uint128_t>(pC_tensormap), recast<uint128_t>(gC_tensormap));
-        // }
-        return tma_load_K_page;
+        if (cute::elect_one_sync()) {
+            // Bringing tensormaps from params to gmem for modification later
+            // ptr[1024b](0x7f0d4de00000) o _1:_1
+            Tensor pC_tensormap = make_tensor(params.tma_load_K.get_tma_descriptor(), Int<1>{}, Int<1>{});
+            Tensor gC_tensormap = make_tensor(params.tma_load_K_page_ptr, Int<1>{}, Int<1>{});
+            copy(recast<uint128_t>(pC_tensormap), recast<uint128_t>(gC_tensormap));
+        }
     }
 
     static Params
@@ -381,7 +377,6 @@ struct CollectiveMainloopFwd {
     template <typename Scheduler, typename SharedStorage>
     CUTLASS_DEVICE void
     load_fp8(Params const& mainloop_params,
-         cute::TmaDescriptor* tma_load_K_page,
          MainloopPipeline pipeline_k,
          MainloopPipeline pipeline_v,
          MainloopPipelineNoTMA pipeline_vt,         
@@ -426,6 +421,8 @@ struct CollectiveMainloopFwd {
                 }
             }
         };
+
+        auto tma_load_K_page_ptr = mainloop_params.tma_load_K_page_ptr;
 
         Tensor mQ = mainloop_params.tma_load_Q.get_tma_tensor(mainloop_params.layout_Q.shape());
         Tensor mK = mainloop_params.tma_load_K.get_tma_tensor(mainloop_params.layout_K.shape()); // (s, h, n, b)
@@ -477,7 +474,7 @@ struct CollectiveMainloopFwd {
             copy(mainloop_params.tma_load_Q.with(reinterpret_cast<cutlass::arch::ClusterTransactionBarrier::ValueType&>(shared_storage.barrier_Q), 0 /*mcast_mask*/), tQgQ, tQsQ); 
 
             /* update tma_load_K_page */
-            // tensormaps_fetch_to_smem(&smem_k_tensormap, tma_load_K_page);
+            tensormaps_fetch_to_smem(&smem_k_tensormap, tma_load_K_page_ptr);
             // cute::tma_descriptor_replace_addr_in_shared_mem(smem_k_tensormap, mK.data());
         }
 

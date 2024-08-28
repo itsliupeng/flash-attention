@@ -293,7 +293,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
         PipelineState smem_pipe_write = cutlass::make_producer_start_state<MainloopPipeline>(); 
         PipelineState smem_pipe_read, smem_pipe_release;
 
-        cute::TmaDescriptor* tma_load_K_page = collective_mainloop.load_init(mainloop_params, 0, 132);
+        collective_mainloop.load_init(mainloop_params, 0, 132);
 
         int work_idx = 0;
 
@@ -325,7 +325,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
             }
 
             collective_mainloop.load_fp8(
-                mainloop_params, tma_load_K_page, pipeline_k, pipeline_k, pipeline_vt,
+                mainloop_params, pipeline_k, pipeline_k, pipeline_vt,
                 smem_pipe_write, smem_pipe_read, shared_storage,
                 scheduler, scheduler_params, work_tile_info, block_coord, work_idx,
                 seqlen_traits_q, seqlen_traits_k);
