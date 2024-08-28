@@ -131,6 +131,8 @@ struct Flash_fwd_params : public Qkv_params {
     bool unpadded_lse; // For varlen paths: LSE is in [nheads, total_seqlen_q] format instead of [b, nheads, seqlen_q].
 
     int * __restrict__ tile_count_semaphore;
+    // tma_load_K for page block table
+    uint64_t * __restrict__ tma_load_K_page_ptr;
 };
 
 template<typename T, int Headdim> void run_mha_fwd_(Flash_fwd_params &params, cudaStream_t stream);

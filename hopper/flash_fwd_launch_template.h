@@ -60,6 +60,7 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
                 params.seqlen_k, params.d, params.h_k, params.b, 
                 params.v_row_stride, params.v_head_stride, params.v_batch_stride
             ),  // layout_V
+            reinterpret_cast<cute::TmaDescriptor*>(params.tma_load_K_page_ptr),
             params.scale_softmax_log2
         });
 #ifdef C_DEBUG

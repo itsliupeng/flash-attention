@@ -39,6 +39,7 @@ void set_params_fprop(Flash_fwd_params &params,
                       void *seqused_k,
                       void *p_d,
                       void *softmax_lse_d,
+                      void *tma_load_K_page_ptr,
                       float p_dropout,
                       float softmax_scale,
                       int window_size_left,
@@ -147,6 +148,8 @@ void set_params_fprop(Flash_fwd_params &params,
     #endif
 
     params.unpadded_lse = unpadded_lse;
+    // tma_load_K_page
+    params.tma_load_K_page_ptr = static_cast<uint64_t*>(tma_load_K_page_ptr);
 }
 
 void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split_kernel=false) {
@@ -309,6 +312,7 @@ mha_fwd(at::Tensor &q,         // batch_size x seqlen_q x num_heads x head_size
                      /*seqused_k=*/nullptr,
                      nullptr,
                      softmax_lse.data_ptr(),
+                     nullptr,
                      /*p_dropout=*/0.f,
                      softmax_scale,
                      /*window_size_left=*/-1,
@@ -464,6 +468,7 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
                      seqused_k.has_value() ? seqused_k.value().data_ptr() : nullptr,
                      /*p_d=*/nullptr,
                      softmax_lse.data_ptr(),
+                     nullptr,
                      /*p_dropout=*/0.f,
                      softmax_scale,
                      window_size_left,
@@ -558,7 +563,7 @@ mla_kvcache_fwd(at::Tensor &q,   // batch_size x 1 x num_heads x head_size
         }
     } else {
         if (q_dtype == at::ScalarType::Float8_e4m3fn)
-            out = torch::empty({batch_size, seqlen_q, num_heads, head_size_og}, q.options().dtype(at::kHalf));
+            out = torch::empty({batch_size, seqlen_q, num_heads, head_size_og}, q.options().dtype(torch::kHalf));
         else
             out = torch::empty({batch_size, seqlen_q, num_heads, head_size_og}, q.options());
     }
@@ -576,6 +581,10 @@ mla_kvcache_fwd(at::Tensor &q,   // batch_size x 1 x num_heads x head_size
     auto opts = q.options();
     auto softmax_lse = torch::empty({batch_size, num_heads, seqlen_q}, opts.dtype(at::kFloat));
 
+    // void* tma_load_K_page_ptr = cutlass::device_memory::allocate<uint8_t>(sizeof(CUtensorMap_st));
+    // void* tma_load_K_page_ptr = nullptr;
+    at::Tensor tma_load_K_page_tensor = torch::empty({16}, q.options().dtype(torch::kUInt64));
+
     Flash_fwd_params params;
     set_params_fprop(params,
                      batch_size,
@@ -587,8 +596,9 @@ mla_kvcache_fwd(at::Tensor &q,   // batch_size x 1 x num_heads x head_size
                      /*cu_seqlens_q_d=*/nullptr,
                      /*cu_seqlens_k_d=*/nullptr,
                      /*seqused_k=*/nullptr,
-                     nullptr,
+                     tma_load_K_page_tensor.data_ptr(),
                      softmax_lse.data_ptr(),
+                     nullptr,
                      /*p_dropout=*/0.f,
                      softmax_scale,
                      /*window_size_left=*/-1,

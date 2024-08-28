@@ -154,6 +154,7 @@ struct CollectiveMainloopFwd {
         typename Seqlen_traits::LayoutT layout_K;
         Element const* ptr_V;
         typename Seqlen_traits::LayoutT layout_V;
+        cute::TmaDescriptor* tma_load_K_page_ptr;
         float const softmax_scale_log2;
     };
 
@@ -166,6 +167,7 @@ struct CollectiveMainloopFwd {
         TMA_Q tma_load_Q;        
         TMA_K tma_load_K;
         TMA_V tma_load_V;
+        cute::TmaDescriptor* tma_load_K_page_ptr;
         float const softmax_scale_log2;
         void print() const {
             cute::print(">>>>> in CollectiveMainloopFwd#Params\n");
@@ -235,6 +237,7 @@ struct CollectiveMainloopFwd {
         return {args.layout_Q, args.layout_K, args.layout_V,
                 cutlass::FastDivmod(cute::ceil_div(get<2>(args.layout_Q.shape()), get<2>(args.layout_K.shape()))),
                 tma_load_Q, tma_load_K, tma_load_V,
+                args.tma_load_K_page_ptr,
                 args.softmax_scale_log2};
     }
 
