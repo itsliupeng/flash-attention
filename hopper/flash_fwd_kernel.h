@@ -311,6 +311,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
                     continue;
                 }
             }
+            // todo: change to use block_info#actual_seq_k when using kvcache. oob whill be 0 thanks to TMA
             int n_block_max = collective_mainloop.get_n_block_max(
                 mainloop_params, m_block, seqlen_traits_q, seqlen_traits_k);
             if constexpr(Is_causal) {
