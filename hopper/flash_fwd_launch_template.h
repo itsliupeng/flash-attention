@@ -43,6 +43,9 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
         params.total_q, params.seqlen_q, params.cu_seqlens_q);
     Seqlen_traits seqlen_traits_k(
         params.total_k, params.seqlen_k, params.cu_seqlens_k, params.seqused_k);
+#ifdef MLA_DEBUG
+    printf("Flash_fwd_params.tma_load_K_page_ptr is null ? %d\n", params.tma_load_K_page_ptr == nullptr);
+#endif
     typename CollectiveMainloop::Params mainloop_params =
         CollectiveMainloop::to_underlying_arguments({
             static_cast<Element const*>(params.q_ptr),
@@ -60,9 +63,13 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
                 params.seqlen_k, params.d, params.h_k, params.b, 
                 params.v_row_stride, params.v_head_stride, params.v_batch_stride
             ),  // layout_V
-            reinterpret_cast<cute::TmaDescriptor*>(params.tma_load_K_page_ptr),
+            reinterpret_cast<cute::TmaDescriptor*>(params.tma_load_K_page_ptr), // tma_load_K_page_ptr
             params.scale_softmax_log2
         });
+
+#ifdef MLA_DEBUG
+    printf("mainloop_params.tma_load_K_page_ptr is null ? %d\n", mainloop_params.tma_load_K_page_ptr == nullptr);
+#endif
 #ifdef C_DEBUG
 	//  layout_Q: (128,256,16,8):(4096,_1,256,524288)
 	//  layout_K: (128,256,16,8):(4096,_1,256,524288)

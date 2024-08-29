@@ -206,6 +206,7 @@ struct CollectiveMainloopFwd {
                 Tensor gC_tensormap = make_tensor(params.tma_load_K_page_ptr, Int<1>{}, Int<1>{});
                 copy(recast<uint128_t>(pC_tensormap), recast<uint128_t>(gC_tensormap));
             }
+            __syncwarp();
         }
     }
 
@@ -401,8 +402,8 @@ struct CollectiveMainloopFwd {
         // Sw<2,4,3> o smem_ptr[8b](unset) o (((_16,_4),(_8,_8)),_1,_8,_1):(((_1,_16),(_64,_512)),_0,_4096,_0)
         using SmemLayoutTransposeVt = typename Ktraits::SmemLayoutTransposeVt;
 
-        auto tma_load_K_page_ptr = mainloop_params.tma_load_K_page_ptr;
-        auto smem_k_tensormap = shared_storage.smem_k_tensormap;
+        cute::TmaDescriptor* tma_load_K_page_ptr = mainloop_params.tma_load_K_page_ptr;
+        cute::TmaDescriptor smem_k_tensormap = shared_storage.smem_k_tensormap;
         // SmemLayoutQ: Sw<2,4,3> o smem_ptr[8b](unset) o (_128,(_64,_9)):(_64,(_1,_8192))
         Tensor sQ = make_tensor(make_smem_ptr(shared_storage.smem_q.data()), SmemLayoutQ{});
         // Tensor sK = make_tensor(make_smem_ptr(shared_storage.smem_v.smem_v.data()), SmemLayoutK{});
@@ -467,19 +468,32 @@ struct CollectiveMainloopFwd {
         int lane_predicate = cute::elect_one_sync();
         int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
 
+#ifdef MLA_DEBUG
+        if (thread0()) {
+            print("tma_load_K_page_ptr is nulltpr? "); print(tma_load_K_page_ptr == nullptr); print("\n");
+            assert(tma_load_K_page_ptr != nullptr);
+        }
+#endif
+
         // Wait for the MMA warpgroups to say that smem_q is ready
         // for fp8, change from NumThreadsPerWarp to NumThreadsPerWarpGroup ??
         cutlass::arch::NamedBarrier::sync(NumMmaThreads + cutlass::NumThreadsPerWarpGroup, static_cast<int>(FwdNamedBarriers::QueryEmpty) /*id*/); // 128 * 2 + 128
+
         if (warp_idx_in_warpgroup == 0 && lane_predicate) {
             shared_storage.barrier_Q.arrive_and_expect_tx(TmaTransactionBytesQ);
             copy(mainloop_params.tma_load_Q.with(reinterpret_cast<cutlass::arch::ClusterTransactionBarrier::ValueType&>(shared_storage.barrier_Q), 0 /*mcast_mask*/), tQgQ, tQsQ); 
 
             if (tma_load_K_page_ptr != nullptr) {
+
                 /* update tma_load_K_page */
                 tensormaps_fetch_to_smem(&smem_k_tensormap, tma_load_K_page_ptr);
                 // cute::tma_descriptor_replace_addr_in_shared_mem(smem_k_tensormap, mK.data());
             }
         }
+        __syncwarp();
+        tma_descriptor_cp_fence_release(tma_load_K_page_ptr, smem_k_tensormap);
+
+        tma_descriptor_fence_acquire(tma_load_K_page_ptr);
 
         shared_storage.barrier_O.wait((work_idx + 1) % 2);
         if constexpr(Is_causal) {
@@ -564,13 +578,8 @@ struct CollectiveMainloopFwd {
         } else {
             if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                 pipeline_k.producer_acquire(smem_pipe_write);
-                if (tma_load_K_page_ptr != nullptr) {
-                    copy(mainloop_params.tma_load_K.with(&smem_k_tensormap, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                        tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
-                } else {
-                    copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                        tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
-                }
+                copy(mainloop_params.tma_load_K.with(&smem_k_tensormap, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                    tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
                 // pipeline_v.producer_acquire(smem_pipe_write);
                 // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                 //     tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));        
@@ -595,13 +604,9 @@ struct CollectiveMainloopFwd {
             for (int iter = 0; iter < extra_iterations && n_block >= 0; ++iter) {
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     pipeline_k.producer_acquire(smem_pipe_write);
-                    if (tma_load_K_page_ptr != nullptr) {
-                        copy(mainloop_params.tma_load_K.with(&smem_k_tensormap, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                            tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
-                    } else {
-                        copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                            tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
-                    }
+                    copy(mainloop_params.tma_load_K.with(&smem_k_tensormap, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                        tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
+
                     // pipeline_v.producer_acquire(smem_pipe_write);
                     // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                     //     tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));                
@@ -624,13 +629,9 @@ struct CollectiveMainloopFwd {
                 
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     pipeline_k.producer_acquire(smem_pipe_write);
-                    if (tma_load_K_page_ptr != nullptr) {
-                        copy(mainloop_params.tma_load_K.with(&smem_k_tensormap, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                            tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
-                    } else {
-                        copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                            tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
-                    }
+                    copy(mainloop_params.tma_load_K.with(&smem_k_tensormap, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                        tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
+
                     // pipeline_v.producer_acquire(smem_pipe_write);
                     // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                     //     tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));                                

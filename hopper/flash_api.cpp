@@ -596,7 +596,7 @@ mla_kvcache_fwd(at::Tensor &q,   // batch_size x 1 x num_heads x head_size
                      /*cu_seqlens_q_d=*/nullptr,
                      /*cu_seqlens_k_d=*/nullptr,
                      /*seqused_k=*/nullptr,
-                     tma_load_K_page_tensor.data_ptr(),
+                     nullptr,
                      softmax_lse.data_ptr(),
                      nullptr,
                      /*p_dropout=*/0.f,
@@ -608,6 +608,9 @@ mla_kvcache_fwd(at::Tensor &q,   // batch_size x 1 x num_heads x head_size
     params.block_table = block_table.data_ptr<int>();
     params.block_table_batch_stride = block_table.stride(0);
     params.page_block_size = page_block_size;
+    params.tma_load_K_page_ptr = static_cast<uint64_t*>(tma_load_K_page_tensor.data_ptr());
+    TORCH_CHECK(params.tma_load_K_page_ptr != nullptr, "tma_load_K_page_ptr should not be nullptr.");
+    
 
     TORCH_CHECK(seqlens_k.dtype() == torch::kInt32, "seqlens_k must have dtype int32");
     CHECK_DEVICE(seqlens_k);

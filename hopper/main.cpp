@@ -70,5 +70,7 @@ int main(int argc, const char *argv[]) {
     std::cout << "block_table: " << block_table.sizes() << std::endl;
     std::cout << "Done." << std::endl;
 
+    std::cout << o << std::endl;
+
     return 0;
 }
