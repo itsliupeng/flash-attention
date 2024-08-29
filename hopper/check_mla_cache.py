@@ -19,6 +19,8 @@ block_table = torch.randint(0, num_blocks-1, (B, (seqlen + block_size - 1)//bloc
 
 out = flash_attn_with_kvcache(q, cache, cache, cache_seqlens=cache_seqlens, block_table=block_table, causal=False)
 
+
+
 print(out.shape)
 
 # is_causal = False

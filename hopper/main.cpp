@@ -60,14 +60,6 @@ int main(int argc, const char *argv[]) {
     at::Tensor block_table = torch::randint(0, num_blocks - 1, {batch_size, max_num_page_per_seq}, options.dtype(torch::kInt32));
     at::Tensor seqlens = torch::tensor({256, 256, 256, 256}, options.dtype(torch::kInt32));
 
-
-    std::cout << "q: " << q.sizes() << ", has storage: " << q.has_storage() << std::endl;
-    std::cout << "cache: " << cache.sizes() << ", has storage: " << cache.has_storage() << std::endl;
-    std::cout << "seqlens: " << seqlens.sizes() << ", has storage: " << seqlens.has_storage() << std::endl;
-    std::cout << "block_table: " << block_table.sizes() << ", has storage: " << block_table.has_storage() << std::endl;
-    std::cout << "out_: " << o.sizes() << ", has storage: " << o.has_storage() << std::endl;
-
-
     // auto q_view = q.view({batch_size, num_heads, seqlen_q, head_size});
     std::vector<at::Tensor> result = mla_kvcache_fwd(q, cache, seqlens, block_table, out_, 1.0f);
     std::cout << result[0].sizes() << std::endl;
