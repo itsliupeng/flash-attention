@@ -20,7 +20,7 @@ def generate_varlen_qkv(q, k):
 
 # B = 8
 # S = 128
-N = 32
+N = 128
 # H = 256
 B, H, S = 8, 256, 128
 

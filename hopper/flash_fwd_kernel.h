@@ -293,7 +293,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
         PipelineState smem_pipe_write = cutlass::make_producer_start_state<MainloopPipeline>(); 
         PipelineState smem_pipe_read, smem_pipe_release;
 
-        collective_mainloop.load_init(mainloop_params, 0, 132);
+        // collective_mainloop.load_init(mainloop_params, 0, 132);
 
         int work_idx = 0;
 

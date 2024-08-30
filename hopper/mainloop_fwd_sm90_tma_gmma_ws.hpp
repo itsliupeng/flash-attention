@@ -474,7 +474,7 @@ struct CollectiveMainloopFwd {
             copy(mainloop_params.tma_load_Q.with(reinterpret_cast<cutlass::arch::ClusterTransactionBarrier::ValueType&>(shared_storage.barrier_Q), 0 /*mcast_mask*/), tQgQ, tQsQ); 
 
             /* update tma_load_K_page */
-            tensormaps_fetch_to_smem(&smem_k_tensormap, tma_load_K_page_ptr);
+            // tensormaps_fetch_to_smem(&smem_k_tensormap, tma_load_K_page_ptr);
             // cute::tma_descriptor_replace_addr_in_shared_mem(smem_k_tensormap, mK.data());
         }
 

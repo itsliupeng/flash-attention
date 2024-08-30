@@ -583,7 +583,7 @@ mla_kvcache_fwd(at::Tensor &q,   // batch_size x 1 x num_heads x head_size
 
     // void* tma_load_K_page_ptr = cutlass::device_memory::allocate<uint8_t>(sizeof(CUtensorMap_st));
     // void* tma_load_K_page_ptr = nullptr;
-    at::Tensor tma_load_K_page_tensor = torch::empty({16}, q.options().dtype(torch::kUInt64));
+    // at::Tensor tma_load_K_page_tensor = torch::empty({16}, q.options().dtype(torch::kUInt64));
 
     Flash_fwd_params params;
     set_params_fprop(params,
@@ -596,7 +596,7 @@ mla_kvcache_fwd(at::Tensor &q,   // batch_size x 1 x num_heads x head_size
                      /*cu_seqlens_q_d=*/nullptr,
                      /*cu_seqlens_k_d=*/nullptr,
                      /*seqused_k=*/nullptr,
-                     tma_load_K_page_tensor.data_ptr(),
+                     nullptr,
                      softmax_lse.data_ptr(),
                      nullptr,
                      /*p_dropout=*/0.f,
