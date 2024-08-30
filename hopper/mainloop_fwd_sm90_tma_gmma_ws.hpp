@@ -198,12 +198,14 @@ struct CollectiveMainloopFwd {
     CUTLASS_DEVICE void
     load_init(Params const& params, int32_t const sm_count, int32_t const sm_idx) const {
         // Initialize tma for loading
-        if (cute::elect_one_sync()) {
-            // Bringing tensormaps from params to gmem for modification later
-            // ptr[1024b](0x7f0d4de00000) o _1:_1
-            Tensor pC_tensormap = make_tensor(params.tma_load_K.get_tma_descriptor(), Int<1>{}, Int<1>{});
-            Tensor gC_tensormap = make_tensor(params.tma_load_K_page_ptr, Int<1>{}, Int<1>{});
-            copy(recast<uint128_t>(pC_tensormap), recast<uint128_t>(gC_tensormap));
+        if ((cutlass::canonical_warp_idx_sync()==0) && cute::elect_one_sync()) {
+            if (params.tma_load_K_page_ptr != nullptr) {
+                // Bringing tensormaps from params to gmem for modification later
+                // ptr[1024b](0x7f0d4de00000) o _1:_1
+                Tensor pC_tensormap = make_tensor(params.tma_load_K.get_tma_descriptor(), Int<1>{}, Int<1>{});
+                Tensor gC_tensormap = make_tensor(make_gmem_ptr(params.tma_load_K_page_ptr), Int<1>{}, Int<1>{});
+                copy(recast<uint128_t>(pC_tensormap), recast<uint128_t>(gC_tensormap));
+            }
         }
     }
 
@@ -424,6 +426,8 @@ struct CollectiveMainloopFwd {
 
         auto tma_load_K_page_ptr = mainloop_params.tma_load_K_page_ptr;
 
+        auto tma_load_K_desc_ptr = mainloop_params.tma_load_K.get_tma_descriptor();
+
         Tensor mQ = mainloop_params.tma_load_Q.get_tma_tensor(mainloop_params.layout_Q.shape());
         Tensor mK = mainloop_params.tma_load_K.get_tma_tensor(mainloop_params.layout_K.shape()); // (s, h, n, b)
         // Tensor mV = mainloop_params.tma_load_V.get_tma_tensor(mainloop_params.layout_V.shape());
@@ -482,7 +486,7 @@ struct CollectiveMainloopFwd {
         if constexpr(Is_causal) {
             if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                 pipeline_k.producer_acquire(smem_pipe_write);
-                copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                     tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
                 // pipeline_v.producer_acquire(smem_pipe_write);
                 // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
@@ -502,7 +506,7 @@ struct CollectiveMainloopFwd {
                 
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     pipeline_k.producer_acquire(smem_pipe_write);
-                    copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                    copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                         tKgK(_, n_block-1), tKsK(_, smem_pipe_write.index()));
                     // pipeline_v.producer_acquire(smem_pipe_write);
                     // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
@@ -523,7 +527,7 @@ struct CollectiveMainloopFwd {
                 
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     pipeline_k.producer_acquire(smem_pipe_write);
-                    copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                    copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                         tKgK(_, n_block-1), tKsK(_, smem_pipe_write.index()));
                     // pipeline_v.producer_acquire(smem_pipe_write);
                     // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
@@ -546,7 +550,7 @@ struct CollectiveMainloopFwd {
         } else {
             if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                 pipeline_k.producer_acquire(smem_pipe_write);
-                copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                     tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
                 // pipeline_v.producer_acquire(smem_pipe_write);
                 // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
@@ -572,7 +576,7 @@ struct CollectiveMainloopFwd {
             for (int iter = 0; iter < extra_iterations && n_block >= 0; ++iter) {
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     pipeline_k.producer_acquire(smem_pipe_write);
-                    copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                    copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                         tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
                     // pipeline_v.producer_acquire(smem_pipe_write);
                     // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
@@ -596,7 +600,7 @@ struct CollectiveMainloopFwd {
                 
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     pipeline_k.producer_acquire(smem_pipe_write);
-                    copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                    copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                         tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
                     // pipeline_v.producer_acquire(smem_pipe_write);
                     // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),

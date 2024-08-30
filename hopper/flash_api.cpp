@@ -39,7 +39,6 @@ void set_params_fprop(Flash_fwd_params &params,
                       void *seqused_k,
                       void *p_d,
                       void *softmax_lse_d,
-                      void *tma_load_K_page_ptr,
                       float p_dropout,
                       float softmax_scale,
                       int window_size_left,
@@ -148,8 +147,6 @@ void set_params_fprop(Flash_fwd_params &params,
     #endif
 
     params.unpadded_lse = unpadded_lse;
-    // tma_load_K_page
-    params.tma_load_K_page_ptr = static_cast<uint64_t*>(tma_load_K_page_ptr);
 }
 
 void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split_kernel=false) {
@@ -312,7 +309,6 @@ mha_fwd(at::Tensor &q,         // batch_size x seqlen_q x num_heads x head_size
                      /*seqused_k=*/nullptr,
                      nullptr,
                      softmax_lse.data_ptr(),
-                     nullptr,
                      /*p_dropout=*/0.f,
                      softmax_scale,
                      /*window_size_left=*/-1,
@@ -468,7 +464,6 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
                      seqused_k.has_value() ? seqused_k.value().data_ptr() : nullptr,
                      /*p_d=*/nullptr,
                      softmax_lse.data_ptr(),
-                     nullptr,
                      /*p_dropout=*/0.f,
                      softmax_scale,
                      window_size_left,
@@ -598,7 +593,6 @@ mla_kvcache_fwd(at::Tensor &q,   // batch_size x 1 x num_heads x head_size
                      /*seqused_k=*/nullptr,
                      nullptr,
                      softmax_lse.data_ptr(),
-                     nullptr,
                      /*p_dropout=*/0.f,
                      softmax_scale,
                      /*window_size_left=*/-1,

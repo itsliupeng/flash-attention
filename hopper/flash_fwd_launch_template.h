@@ -47,12 +47,12 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
         CollectiveMainloop::to_underlying_arguments({
             static_cast<Element const*>(params.q_ptr),
             seqlen_traits_q.get_gmem_layout(
-                params.seqlen_q, params.d, params.h, params.b, 
+                params.seqlen_q, params.d, params.h, params.b,
                 params.q_row_stride, params.q_head_stride, params.q_batch_stride
             ),  // layout_Q
             static_cast<Element const*>(params.k_ptr),
             seqlen_traits_k.get_gmem_layout(
-                params.seqlen_k, params.d, params.h_k, params.b, 
+                params.seqlen_k, params.d, params.h_k, params.b,  // [s, h, n, b] => [page_size, h, num_page]
                 params.k_row_stride, params.k_head_stride, params.k_batch_stride
             ),  // layout_K
             static_cast<Element const*>(params.v_ptr),
