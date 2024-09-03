@@ -5,7 +5,7 @@ from flash_attn_interface import flash_attn_func, flash_attn_varlen_func, flash_
 # S = 128
 N = 128
 # H = 256
-B, H, S = 4, 256, 128
+B, H, S = 4, 576, 128
 
 num_blocks = B
 block_size = 64

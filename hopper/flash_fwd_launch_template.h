@@ -80,7 +80,9 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
             ),  // layout_V
             reinterpret_cast<cute::TmaDescriptor*>(params.tensormaps),
             params.scale_softmax_log2,
-            params.block_table
+            params.block_table,
+            params.page_block_size,
+            params.k_batch_stride
         });
 #ifdef C_DEBUG
 	//  layout_Q: (128,256,16,8):(4096,_1,256,524288)

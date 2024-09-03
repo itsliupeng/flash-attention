@@ -157,6 +157,8 @@ struct CollectiveMainloopFwd {
         cute::TmaDescriptor* tensormaps;
         float const softmax_scale_log2;
         int* block_table;
+        int page_size;
+        int64_t page_stride;
     };
 
     // Device side kernel params
@@ -172,6 +174,8 @@ struct CollectiveMainloopFwd {
         float const softmax_scale_log2;
         Element const* ptr_K;
         int* block_table;
+        int page_size;
+        int64_t page_stride;
 
         void print() const {
             cute::print(">>>>> in CollectiveMainloopFwd#Params\n");
@@ -181,6 +185,9 @@ struct CollectiveMainloopFwd {
             cute::print("\t tma_load_Q: "); cute::print(tma_load_Q); cute::print("\n");
             cute::print("\t tma_load_K: "); cute::print(tma_load_K); cute::print("\n");
             cute::print("\t tma_load_V: "); cute::print(tma_load_V); cute::print("\n");
+            cute::print("\t block_table: "); cute::print(block_table); cute::print("\n");
+            cute::print("\t page_size: "); cute::print(page_size); cute::print("\n");
+            cute::print("\t page_stride: "); cute::print(page_stride); cute::print("\n");
             cute::print("<<<<< in CollectiveMainloopFwd#Params\n");  
         };
     };
@@ -244,7 +251,9 @@ struct CollectiveMainloopFwd {
                 args.tensormaps,
                 args.softmax_scale_log2,
                 args.ptr_K,
-                args.block_table};
+                args.block_table,
+                args.page_size,
+                args.page_stride};
     }
 
     /// Issue Tma Descriptor Prefetch -- ideally from a single thread for best performance
@@ -383,6 +392,18 @@ struct CollectiveMainloopFwd {
         scheduler.broadcast_next_work(work_tile_info);
     }
 
+    // def update_tma_desc(tma_load_K_desc_ptr, ptr_K, block_table, n_block, kBlockN, page_size, page_stride) {
+    //     int lane_predicate = cute::elect_one_sync();
+    //     int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
+
+    //     cute::tma_descriptor_fence_acquire(tma_load_K_desc_ptr)
+    //     if (warp_idx_in_warpgroup == 0 && lane_predicate) {
+    //         int64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride);
+    //         cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
+    //     }
+    //     __syncwarp();
+    //     cute::tma_descriptor_fence_release(tma_load_K_desc_ptr);
+    // }
 
     template <typename Scheduler, typename SharedStorage>
     CUTLASS_DEVICE void
@@ -402,6 +423,7 @@ struct CollectiveMainloopFwd {
          const Seqlen_traits& seqlen_traits_q,
          const Seqlen_traits& seqlen_traits_k         
          ) {
+        static constexpr int kBlockN = get<1>(TileShape_MNK{});
 
         // Sw<2,4,3> o smem_ptr[8b](unset) o (((_8,_8),(_16,_4)),_2,_4,_2):(((_64,_512),(_1,_16)),_4096,_8192,_32768)
         // Sw<2,4,3> o smem_ptr[8b](unset) o (((_8,_8),(_16,_4)),_1,_8,_1):(((_64,_512),(_1,_16)),_0,_4096,_0)
@@ -476,9 +498,11 @@ struct CollectiveMainloopFwd {
             }
         }
 
-        constexpr int page_size = 64;
-        // void* table_ptr;
-        // void* cache_ptr;
+        int page_size = mainloop_params.page_size;
+        int64_t page_stride = mainloop_params.page_stride;
+        const int* block_table = mainloop_params.block_table;
+        auto ptr_K = mainloop_params.ptr_K;
+
         int n_block_max;
         if (is_page_cache) {
             n_block_max = get_n_block_max(mainloop_params, m_block, seqlen_traits_q, seqlen_traits_k);
@@ -496,24 +520,22 @@ struct CollectiveMainloopFwd {
         if (warp_idx_in_warpgroup == 0 && lane_predicate) {
             shared_storage.barrier_Q.arrive_and_expect_tx(TmaTransactionBytesQ);
             copy(mainloop_params.tma_load_Q.with(reinterpret_cast<cutlass::arch::ClusterTransactionBarrier::ValueType&>(shared_storage.barrier_Q), 0 /*mcast_mask*/), tQgQ, tQsQ); 
-
-            if (is_page_cache) {
-                /* update tma_load_K_page */
-                tensormaps_fetch_to_smem(&smem_k_tensormap, tma_load_K_desc_ptr);
-                cute::tma_descriptor_replace_addr_in_shared_mem(smem_k_tensormap, mainloop_params.ptr_K);
-            }
         }
 
-        if (is_page_cache) {
-            __syncwarp();
-            cute::tma_descriptor_cp_fence_release(tma_load_K_desc_ptr, smem_k_tensormap);
-        }
+        // if (is_page_cache) {
+        //     update_tma_desc(tma_load_K_desc_ptr, mainloop_params.ptr_K, block_table, n_block, kBlockN, page_size, page_stride)
+        // }
+
+        // if (is_page_cache) {
+        //     __syncwarp();
+        //     cute::tma_descriptor_cp_fence_release(tma_load_K_desc_ptr, smem_k_tensormap);
+        // }
 
         shared_storage.barrier_O.wait((work_idx + 1) % 2);
 
-        if (is_page_cache) {
-            cute::tma_descriptor_fence_acquire(tma_load_K_desc_ptr);
-        }
+        // if (is_page_cache) {
+        //     cute::tma_descriptor_fence_acquire(tma_load_K_desc_ptr);
+        // }
 
         if constexpr(Is_causal) {
             if (warp_idx_in_warpgroup == 0 && lane_predicate) {
@@ -581,6 +603,10 @@ struct CollectiveMainloopFwd {
             ++smem_pipe_read;
         } else {
             if (warp_idx_in_warpgroup == 0 && lane_predicate) {
+                if (is_page_cache) {
+                    int64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride);
+                    cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
+                }
                 pipeline_k.producer_acquire(smem_pipe_write);
                 copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                     tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
@@ -603,10 +629,15 @@ struct CollectiveMainloopFwd {
             ++smem_pipe_read;
             --n_block;
 
+
             constexpr int extra_iterations = kStages - 1;
             CUTLASS_PRAGMA_UNROLL
             for (int iter = 0; iter < extra_iterations && n_block >= 0; ++iter) {
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
+                    if (is_page_cache) {
+                        int64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride);
+                        cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
+                    }
                     pipeline_k.producer_acquire(smem_pipe_write);
                     copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                         tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
@@ -629,8 +660,11 @@ struct CollectiveMainloopFwd {
             // CUTLASS_PRAGMA_NO_UNROLL
             #pragma unroll 2        
             for (; n_block >= 0; --n_block) {
-                
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
+                    if (is_page_cache) {
+                        int64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride);
+                        cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
+                    }
                     pipeline_k.producer_acquire(smem_pipe_write);
                     copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                         tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
