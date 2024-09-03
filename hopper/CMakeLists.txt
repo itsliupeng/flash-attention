@@ -1,4 +1,4 @@
-set(CMAKE_CUDA_ARCHITECTURES 90)
+set(CMAKE_CUDA_ARCHITECTURES 90a)
 set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
 cmake_minimum_required(VERSION 3.28 FATAL_ERROR)
 project(vllm-flash-attention LANGUAGES CXX CUDA)
@@ -20,7 +20,6 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Set CUDA standard
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-set(CMAKE_CUDA_ARCHITECTURES 90a)
 # set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr --use_fast_math -t 8 \
 #                       -gencode arch=compute_90a,code=sm_90a")
 

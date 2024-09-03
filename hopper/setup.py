@@ -168,6 +168,7 @@ if not SKIP_CUDA_BUILD:
         "-DCUTLASS_DEBUG_TRACE_LEVEL=0",  # Can toggle for debugging
         "-DNDEBUG",  # Important, otherwise performance is severely impacted   
         "-DPY_DEBUG",          
+        "-DC_DEBUG",          
     ]
     include_dirs = [
         # Path(this_dir) / "fmha-pipeline",
