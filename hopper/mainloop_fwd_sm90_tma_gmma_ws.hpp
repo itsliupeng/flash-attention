@@ -154,7 +154,7 @@ struct CollectiveMainloopFwd {
         typename Seqlen_traits::LayoutT layout_K;
         Element const* ptr_V;
         typename Seqlen_traits::LayoutT layout_V;
-        cute::TmaDescriptor* tma_load_K_page_ptr;
+        cute::TmaDescriptor* tensormaps;
         float const softmax_scale_log2;
     };
 
@@ -167,7 +167,7 @@ struct CollectiveMainloopFwd {
         TMA_Q tma_load_Q;        
         TMA_K tma_load_K;
         TMA_V tma_load_V;
-        cute::TmaDescriptor* tma_load_K_page_ptr;
+        cute::TmaDescriptor* tensormaps;
         float const softmax_scale_log2;
         void print() const {
             cute::print(">>>>> in CollectiveMainloopFwd#Params\n");
@@ -195,18 +195,20 @@ struct CollectiveMainloopFwd {
         cp_async_wait<0>();
     }
 
-    CUTLASS_DEVICE void
+    CUTLASS_DEVICE cute::TmaDescriptor*
     load_init(Params const& params, int32_t const sm_count, int32_t const sm_idx) const {
+        cute::TmaDescriptor* gmem_tensormaps = reinterpret_cast<cute::TmaDescriptor*>(params.tensormaps);
+        cute::TmaDescriptor* tma_desc = &gmem_tensormaps[sm_idx];
+
         // Initialize tma for loading
         if ((cutlass::canonical_warp_idx_sync()==0) && cute::elect_one_sync()) {
-            if (params.tma_load_K_page_ptr != nullptr) {
-                // Bringing tensormaps from params to gmem for modification later
-                // ptr[1024b](0x7f0d4de00000) o _1:_1
-                Tensor pC_tensormap = make_tensor(params.tma_load_K.get_tma_descriptor(), Int<1>{}, Int<1>{});
-                Tensor gC_tensormap = make_tensor(make_gmem_ptr(params.tma_load_K_page_ptr), Int<1>{}, Int<1>{});
-                copy(recast<uint128_t>(pC_tensormap), recast<uint128_t>(gC_tensormap));
-            }
+            // Bringing tensormaps from params to gmem for modification later
+            // ptr[1024b](0x7f0d4de00000) o _1:_1
+            Tensor pC_tensormap = make_tensor(params.tma_load_K.get_tma_descriptor(), Int<1>{}, Int<1>{});
+            Tensor gC_tensormap = make_tensor(make_gmem_ptr(tma_desc), Int<1>{}, Int<1>{});
+            copy(recast<uint128_t>(pC_tensormap), recast<uint128_t>(gC_tensormap));
         }
+        return tma_desc;
     }
 
     static Params
@@ -235,7 +237,7 @@ struct CollectiveMainloopFwd {
         return {args.layout_Q, args.layout_K, args.layout_V,
                 cutlass::FastDivmod(cute::ceil_div(get<2>(args.layout_Q.shape()), get<2>(args.layout_K.shape()))),
                 tma_load_Q, tma_load_K, tma_load_V,
-                args.tma_load_K_page_ptr,
+                args.tensormaps,
                 args.softmax_scale_log2};
     }
 
@@ -379,6 +381,7 @@ struct CollectiveMainloopFwd {
     template <typename Scheduler, typename SharedStorage>
     CUTLASS_DEVICE void
     load_fp8(Params const& mainloop_params,
+         cute::TmaDescriptor* tma_load_K_page_ptr,
          MainloopPipeline pipeline_k,
          MainloopPipeline pipeline_v,
          MainloopPipelineNoTMA pipeline_vt,         
@@ -423,8 +426,6 @@ struct CollectiveMainloopFwd {
                 }
             }
         };
-
-        auto tma_load_K_page_ptr = mainloop_params.tma_load_K_page_ptr;
 
         auto tma_load_K_desc_ptr = mainloop_params.tma_load_K.get_tma_descriptor();
 

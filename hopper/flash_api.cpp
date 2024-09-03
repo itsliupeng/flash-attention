@@ -526,6 +526,7 @@ mla_kvcache_fwd(at::Tensor &q,   // batch_size x 1 x num_heads x head_size
     const int max_num_blocks_per_seq = block_table.size(1);
     const int num_blocks = cache.size(0);
     const int page_block_size = cache.size(1);
+    TORCH_CHECK(page_block_size % 64 == 0, "Only support page_block_size a multiple of 64");
 
     CHECK_SHAPE(q, batch_size, seqlen_q, num_heads, head_size_og);
     CHECK_SHAPE(cache, num_blocks, page_block_size, num_heads_k, head_size_og);
@@ -575,10 +576,6 @@ mla_kvcache_fwd(at::Tensor &q,   // batch_size x 1 x num_heads x head_size
 
     auto opts = q.options();
     auto softmax_lse = torch::empty({batch_size, num_heads, seqlen_q}, opts.dtype(at::kFloat));
-
-    // void* tma_load_K_page_ptr = cutlass::device_memory::allocate<uint8_t>(sizeof(CUtensorMap_st));
-    // void* tma_load_K_page_ptr = nullptr;
-    // at::Tensor tma_load_K_page_tensor = torch::empty({16}, q.options().dtype(torch::kUInt64));
 
     Flash_fwd_params params;
     set_params_fprop(params,
