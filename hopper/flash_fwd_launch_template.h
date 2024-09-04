@@ -81,6 +81,7 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
             reinterpret_cast<cute::TmaDescriptor*>(params.tensormaps),
             params.scale_softmax_log2,
             params.block_table,
+            params.block_table_batch_stride,
             params.page_block_size,
             params.k_batch_stride
         });

@@ -330,8 +330,9 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
                 }
             }
 
+            const int* current_block_table = mainloop_params.block_table + bidb * mainloop_params.block_table_batch_stride;
             collective_mainloop.load_fp8(
-                mainloop_params, tma_load_K_page_ptr, pipeline_k, pipeline_k, pipeline_vt,
+                mainloop_params, tma_load_K_page_ptr, current_block_table, pipeline_k, pipeline_k, pipeline_vt,
                 smem_pipe_write, smem_pipe_read, shared_storage,
                 scheduler, scheduler_params, work_tile_info, block_coord, work_idx,
                 seqlen_traits_q, seqlen_traits_k);

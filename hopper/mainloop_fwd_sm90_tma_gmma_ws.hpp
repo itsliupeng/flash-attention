@@ -157,6 +157,7 @@ struct CollectiveMainloopFwd {
         cute::TmaDescriptor* tensormaps;
         float const softmax_scale_log2;
         int* block_table;
+        int64_t block_table_batch_stride;
         int page_size;
         int64_t page_stride;
     };
@@ -174,6 +175,7 @@ struct CollectiveMainloopFwd {
         float const softmax_scale_log2;
         Element const* ptr_K;
         int* block_table;
+        int64_t block_table_batch_stride;
         int page_size;
         int64_t page_stride;
 
@@ -186,6 +188,7 @@ struct CollectiveMainloopFwd {
             cute::print("\t tma_load_K: "); cute::print(tma_load_K); cute::print("\n");
             cute::print("\t tma_load_V: "); cute::print(tma_load_V); cute::print("\n");
             cute::print("\t block_table: "); cute::print(block_table); cute::print("\n");
+            cute::print("\t block_table_batch_stride: "); cute::print(block_table_batch_stride); cute::print("\n");
             cute::print("\t page_size: "); cute::print(page_size); cute::print("\n");
             cute::print("\t page_stride: "); cute::print(page_stride); cute::print("\n");
             cute::print("<<<<< in CollectiveMainloopFwd#Params\n");  
@@ -211,8 +214,9 @@ struct CollectiveMainloopFwd {
         cute::TmaDescriptor* gmem_tensormaps = reinterpret_cast<cute::TmaDescriptor*>(params.tensormaps);
         cute::TmaDescriptor* tma_desc = &gmem_tensormaps[sm_idx];
 
+        int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
         // Initialize tma for loading
-        if ((cutlass::canonical_warp_idx_sync()==0) && cute::elect_one_sync()) {
+        if ((warp_idx_in_warpgroup == 0) && cute::elect_one_sync()) {
             // Bringing tensormaps from params to gmem for modification later
             // ptr[1024b](0x7f0d4de00000) o _1:_1
             Tensor pC_tensormap = make_tensor(params.tma_load_K.get_tma_descriptor(), Int<1>{}, Int<1>{});
@@ -409,6 +413,7 @@ struct CollectiveMainloopFwd {
     CUTLASS_DEVICE void
     load_fp8(Params const& mainloop_params,
          cute::TmaDescriptor* tma_load_K_page_ptr,
+         const int *block_table,
          MainloopPipeline pipeline_k,
          MainloopPipeline pipeline_v,
          MainloopPipelineNoTMA pipeline_vt,         
@@ -500,7 +505,7 @@ struct CollectiveMainloopFwd {
 
         int page_size = mainloop_params.page_size;
         int64_t page_stride = mainloop_params.page_stride;
-        const int* block_table = mainloop_params.block_table;
+        // const int* block_table = mainloop_params.block_table;
         auto ptr_K = mainloop_params.ptr_K;
 
         int n_block_max;
