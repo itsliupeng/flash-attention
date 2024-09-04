@@ -5,7 +5,7 @@
 int main(int argc, const char *argv[]) {
     std::cout << "hello world" << std::endl;
     int batch_size = 4;
-    int seqlen_q = 1;
+    // int seqlen_q = 1;
     // int seqlen = 128;
     int num_heads = 128;
     // int num_heads_k = 1;
@@ -13,16 +13,16 @@ int main(int argc, const char *argv[]) {
     int head_size = 576;
     int out_head_size = 512;
     auto options = torch::TensorOptions().device(torch::kCUDA).dtype(torch::kHalf);
-    at::Tensor q = torch::randn({batch_size, seqlen_q, num_heads, head_size}, options).to(torch::kFloat8_e4m3fn);
+    at::Tensor q = torch::randn({batch_size, 1, num_heads, head_size}, options).to(torch::kFloat8_e4m3fn);
 
     // page table
     int num_blocks = batch_size;
-    int page_size = 64;
+    int page_size = 128;
     at::Tensor cache = torch::randn({num_blocks, page_size, 1, head_size}, options).to(torch::kFloat8_e4m3fn);
 
     // at::Tensor k = torch::randn({batch_size * seqlen, num_heads_k, head_size}, options).to(torch::kFloat8_e4m3fn);
     // at::Tensor v = k;
-    at::Tensor o = torch::zeros({batch_size, seqlen_q, num_heads, out_head_size},  options);
+    at::Tensor o = torch::zeros({batch_size, 1, num_heads, out_head_size},  options);
     // std::cout << q.sizes() << " " << q.device().type() << " " << q.layout() << std::endl;
 
     // // Prepare the optional tensors for output and alibi slopes
@@ -56,26 +56,24 @@ int main(int argc, const char *argv[]) {
     //         const float softmax_scale) {
 
     c10::optional<at::Tensor> out_ = o;
-    int max_num_page_per_seq = 10;
-    at::Tensor block_table = torch::randint(0, num_blocks - 1, {batch_size, max_num_page_per_seq}, options.dtype(torch::kInt32));
-    at::Tensor seqlens = torch::tensor({256, 256, 256, 256}, options.dtype(torch::kInt32));
 
-
-    std::cout << "q: " << q.sizes() << ", has storage: " << q.has_storage() << std::endl;
-    std::cout << "cache: " << cache.sizes() << ", has storage: " << cache.has_storage() << std::endl;
-    std::cout << "seqlens: " << seqlens.sizes() << ", has storage: " << seqlens.has_storage() << std::endl;
-    std::cout << "block_table: " << block_table.sizes() << ", has storage: " << block_table.has_storage() << std::endl;
-    std::cout << "out_: " << o.sizes() << ", has storage: " << o.has_storage() << std::endl;
-
+    const int seqlen = 256;
+    at::Tensor seqlens = torch::tensor({seqlen, seqlen, seqlen, seqlen}, options.dtype(torch::kInt32));
+    int max_num_page_per_seq = (seqlen + page_size - 1) / page_size ;
+    at::Tensor block_table = torch::randint(0, num_blocks, {batch_size, max_num_page_per_seq}, options.dtype(torch::kInt32));
 
     // auto q_view = q.view({batch_size, num_heads, seqlen_q, head_size});
-    std::vector<at::Tensor> result = mla_kvcache_fwd(q, cache, seqlens, block_table, out_, 1.0f);
+    std::vector<at::Tensor> result;
+    for (int i = 0; i < 3; i++) {
+        result = mla_kvcache_fwd(q, cache, seqlens, block_table, out_, 1.0f);
+    }
     std::cout << result[0].sizes() << std::endl;
 
     std::cout << "q: " << q.sizes() << std::endl;
     std::cout << "cache: " << cache.sizes() << std::endl;
     std::cout << "seqlens: " << seqlens.sizes() << std::endl;
-    std::cout << "block_table: " << block_table.sizes() << std::endl;
+    std::cout << "block_table size: " << block_table.sizes() << std::endl;
+    std::cout << "block_table: " << block_table << std::endl;
     std::cout << "Done." << std::endl;
 
     return 0;

@@ -12,14 +12,15 @@ block_size = 64
 
 seqlen = 128
 
-q = torch.rand(B, 1, N, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
+q = torch.rand(B, N, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
+# q = torch.rand(B, 1, N, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
 cache = torch.rand(num_blocks, block_size, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
 cache_seqlens = torch.tensor([seqlen] * B, dtype=torch.int32, device="cuda")
-block_table = torch.randint(0, num_blocks-1, (B, (seqlen + block_size - 1)//block_size), dtype=torch.int32, device="cuda")
+block_table = torch.randint(0, num_blocks, (B, (seqlen + block_size - 1)//block_size), dtype=torch.int32, device="cuda")
 
 for i in range(2):
     out = flash_attn_with_kvcache(q, cache, cache, cache_seqlens=cache_seqlens, block_table=block_table, causal=False)
-    
+    print(out)
 
 print(out.shape)
 

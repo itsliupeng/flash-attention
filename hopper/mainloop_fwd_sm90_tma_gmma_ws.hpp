@@ -256,6 +256,7 @@ struct CollectiveMainloopFwd {
                 args.softmax_scale_log2,
                 args.ptr_K,
                 args.block_table,
+                args.block_table_batch_stride,
                 args.page_size,
                 args.page_stride};
     }
@@ -505,7 +506,6 @@ struct CollectiveMainloopFwd {
 
         int page_size = mainloop_params.page_size;
         int64_t page_stride = mainloop_params.page_stride;
-        // const int* block_table = mainloop_params.block_table;
         auto ptr_K = mainloop_params.ptr_K;
 
         int n_block_max;
@@ -610,7 +610,7 @@ struct CollectiveMainloopFwd {
             if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                 if (is_page_cache) {
                     int64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride);
-                    cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
+                    // cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
                 }
                 pipeline_k.producer_acquire(smem_pipe_write);
                 copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
@@ -641,7 +641,7 @@ struct CollectiveMainloopFwd {
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     if (is_page_cache) {
                         int64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride);
-                        cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
+                        // cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
                     }
                     pipeline_k.producer_acquire(smem_pipe_write);
                     copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
@@ -668,7 +668,7 @@ struct CollectiveMainloopFwd {
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     if (is_page_cache) {
                         int64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride);
-                        cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
+                        // cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
                     }
                     pipeline_k.producer_acquire(smem_pipe_write);
                     copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
