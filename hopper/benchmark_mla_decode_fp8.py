@@ -24,150 +24,7 @@ try:
 except ImportError:
     xops = None
 
-try:
-    import cudnn
-except ImportError:
-    cudnn = None
-
-
-def convert_to_cudnn_type(torch_type):
-    if torch_type == torch.float16:
-        return cudnn.data_type.HALF
-    elif torch_type == torch.bfloat16:
-        return cudnn.data_type.BFLOAT16
-    elif torch_type == torch.float32:
-        return cudnn.data_type.FLOAT
-    elif torch_type == torch.int32:
-        return cudnn.data_type.INT32
-    elif torch_type == torch.int64:
-        return cudnn.data_type.INT64
-    elif torch_type == torch.float8_e4m3fn:
-        return cudnn.data_type.FP8_E4M3
-    elif torch_type == torch.float8_e4m3fn:
-        return cudnn.data_type.FP8_E5M2
-    else:
-        raise ValueError("Unsupported tensor data type.")
-
-def cudnn_spda_setup(qkv, seqlen_q, seqlen_k, causal=False):
-    b, _, _, nheads, headdim = qkv.shape
-    assert cudnn is not None, 'CUDNN is not available'
-    o_gpu = torch.zeros(b, seqlen_q, nheads, headdim, dtype=qkv.dtype, device=qkv.device)
-    o_gpu_transposed = torch.as_strided(
-        o_gpu,
-        [b, nheads, seqlen_q, headdim],
-        [nheads * seqlen_q * headdim, headdim, nheads * headdim, 1],
-    )
-    stats_gpu = torch.empty(b, nheads, seqlen_q, 1, dtype=torch.float32, device=qkv.device)
-    amax_s_gpu = torch.empty(1, 1, 1, 1, dtype=torch.float32, device=qkv.device)
-    amax_o_gpu = torch.empty(1, 1, 1, 1, dtype=torch.float32, device=qkv.device)
-    graph = cudnn.pygraph(
-        io_data_type=convert_to_cudnn_type(qkv.dtype),
-        intermediate_data_type=cudnn.data_type.FLOAT,
-        compute_data_type=cudnn.data_type.FLOAT,
-    )
-    new_q = torch.as_strided(
-        qkv,
-        [b, nheads, seqlen_q, headdim],
-        [seqlen_q * nheads * headdim * 3, headdim, headdim * nheads * 3, 1],
-        storage_offset=0,
-    )
-    q = graph.tensor(
-        name = "Q",
-        dim = list(new_q.shape),
-        stride = list(new_q.stride()),
-        data_type=convert_to_cudnn_type(qkv.dtype)
-    )
-    new_k = torch.as_strided(
-        qkv,
-        [b, nheads, seqlen_k, headdim],
-        [seqlen_k * nheads * headdim * 3, headdim, headdim * nheads * 3, 1],
-        storage_offset=nheads * headdim,
-    )
-    k = graph.tensor(
-        name = "K",
-        dim = list(new_k.shape),
-        stride = list(new_k.stride()),
-        data_type=convert_to_cudnn_type(qkv.dtype)
-    )
-    new_v = torch.as_strided(
-        qkv,
-        [b, nheads, seqlen_k, headdim],
-        [seqlen_k * nheads * headdim * 3, headdim, headdim * nheads * 3, 1],
-        storage_offset=nheads * headdim * 2,
-    )
-    v = graph.tensor(
-        name = "V",
-        dim = list(new_v.shape),
-        stride = list(new_v.stride()),
-        data_type=convert_to_cudnn_type(qkv.dtype)
-    )
-
-    def get_default_scale_tensor():
-        return graph.tensor(
-            dim = [1, 1, 1, 1],
-            stride = [1, 1, 1, 1],
-            data_type=cudnn.data_type.FLOAT
-        )
-
-    default_scale_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float32, device="cuda")
-    descale_q = get_default_scale_tensor()
-    descale_k = get_default_scale_tensor()
-    descale_v = get_default_scale_tensor()
-    descale_s = get_default_scale_tensor()
-    scale_s = get_default_scale_tensor()
-    scale_o = get_default_scale_tensor()
-
-    o, _, amax_s, amax_o = graph.sdpa_fp8(
-        q=q,
-        k=k,
-        v=v,
-        descale_q=descale_q,
-        descale_k=descale_k,
-        descale_v=descale_v,
-        descale_s=descale_s,
-        scale_s=scale_s,
-        scale_o=scale_o,
-        is_inference=True,
-        attn_scale=1.0 / math.sqrt(headdim),
-        use_causal_mask=causal,
-        name="sdpa",
-    )
-
-    o.set_output(True).set_dim(o_gpu_transposed.shape).set_stride(o_gpu_transposed.stride())
-
-    amax_s.set_output(False).set_dim(amax_s_gpu.shape).set_stride(amax_s_gpu.stride())
-    amax_o.set_output(False).set_dim(amax_o_gpu.shape).set_stride(amax_o_gpu.stride())
-    # stats.set_output(True).set_data_type(cudnn.data_type.FLOAT)
-
-    graph.validate()
-    graph.build_operation_graph()
-    graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
-    graph.check_support()
-    graph.build_plans()
-
-    variant_pack = {
-        q: new_q,
-        k: new_k,
-        v: new_v,
-        descale_q: default_scale_gpu,
-        descale_k: default_scale_gpu,
-        descale_v: default_scale_gpu,
-        descale_s: default_scale_gpu,
-        scale_s: default_scale_gpu,
-        scale_o: default_scale_gpu,
-        o: o_gpu_transposed,
-        amax_s: amax_s_gpu,
-        amax_o: amax_o_gpu,
-    }
-
-    workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
-
-    def run(*args, **kwargs):
-        graph.execute(variant_pack, workspace)
-        return o_gpu, amax_o_gpu
-
-    return run
-
+cudnn = None
 
 def attention_pytorch(qkv, dropout_p=0.0, causal=True):
     """
@@ -199,7 +56,7 @@ def attention_pytorch(qkv, dropout_p=0.0, causal=True):
 
 def flops(batch, seqlen, headdim, nheads, causal, mode="fwd"):
     assert mode in ["fwd", "bwd", "fwd_bwd"]
-    f = 4 * batch * seqlen**2 * nheads * headdim // (2 if causal else 1)
+    f = 4 * batch * seqlen * nheads * headdim // (2 if causal else 1)
     return f if mode == "fwd" else (2.5 * f if mode == "bwd" else 3.5 * f)
 
 def efficiency(flop, time):
@@ -218,18 +75,19 @@ device = 'cuda'
 # dtype = torch.float16
 dtype = torch.float8_e4m3fn
 
-bs_seqlen_vals = [(32, 512), (16, 1024), (8, 2048), (4, 4224), (2, 8448), (1, 8448 * 2), (1, 8448 * 4)]
+bs = 1024
+bs_seqlen_vals = [(bs, 512), (bs, 1024), (bs, 2048), (bs, 4224), (bs, 8448), (bs, 8448 * 2), (bs, 8448 * 4)]
 # bs_seqlen_vals = [(32, 512), (16, 1024), (8, 2048), (4, 4096), (2, 8192), (1, 8192 * 2)]
 # bs_seqlen_vals = [(4, 4096), (2, 8192), (1, 8192 * 2), (4, 4224), (2, 8448), (1, 8448 * 2)]
 # bs_seqlen_vals = [(32, 512), (16, 1024), (8, 2048)]
-causal_vals = [False, True]
+causal_vals = [False]
 # causal_vals = [False]
 headdim_vals = [256]
-dim = 2048
+# dim = 2048
 # dim = 256
 dropout_p = 0.0
 
-methods = (["Pytorch", "Flash3", "cuDNN"]        
+methods = (["Flash3"]        
         # + (["Triton"] if attention_triton is not None else [])
         #    + (["xformers.c"] if xops is not None else [])
         #    + (["xformers.f"] if xops is not None else [])
@@ -246,14 +104,18 @@ for causal in causal_vals:
         for batch_size, seqlen in bs_seqlen_vals:
             torch.cuda.empty_cache()
             config = (causal, headdim, batch_size, seqlen)
-            nheads = dim // headdim
-            q, k, v = [torch.randn(batch_size, seqlen, nheads, headdim, device=device, dtype=torch.float16, requires_grad=False) for _ in range(3)]
+            # nheads = dim // headdim
+            nheads = 128
+            # q, k, v = [torch.randn(batch_size, seqlen, nheads, headdim, device=device, dtype=torch.float16, requires_grad=False) for _ in range(3)]
             
-            qkv = torch.stack([q, k, v], dim=2)
-            qkv = qkv.to(torch.float16)
-            f = time_fwd(attention_pytorch, qkv, dropout_p, causal=causal, repeats=repeats, verbose=False)
-            time_f[config, "Pytorch"] = f
-            res_baseline = attention_pytorch(qkv, dropout_p, causal=causal)
+            q = torch.randn(batch_size, 1, nheads, headdim, device=device, dtype=torch.float16, requires_grad=False)
+            k = torch.randn(batch_size, seqlen, 1, headdim, device=device, dtype=torch.float16, requires_grad=False)
+            v = torch.randn(batch_size, seqlen, 1, headdim, device=device, dtype=torch.float16, requires_grad=False)
+            # qkv = torch.stack([q, k, v], dim=2)
+            # qkv = qkv.to(torch.float16)
+            # f = time_fwd(attention_pytorch, qkv, dropout_p, causal=causal, repeats=repeats, verbose=False)
+            # time_f[config, "Pytorch"] = f
+            # res_baseline = attention_pytorch(qkv, dropout_p, causal=causal)
 
             if attention_triton is not None:
                 q_transposed = q.transpose(1, 2).contiguous().to(torch.float8_e4m3fn)
