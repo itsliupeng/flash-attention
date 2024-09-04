@@ -8,6 +8,7 @@
 
 #include "cutlass/cutlass.h"
 #include "cutlass/cluster_launch.hpp"
+#include "cutlass/util/device_memory.h"
 
 #include "static_switch.h"
 #include "flash.h"
@@ -43,6 +44,23 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
         params.total_q, params.seqlen_q, params.cu_seqlens_q);
     Seqlen_traits seqlen_traits_k(
         params.total_k, params.seqlen_k, params.cu_seqlens_k, params.seqused_k);
+
+    int device;
+    cudaGetDevice(&device);
+    int multiprocessor_count;
+    CHECK_CUDA(cudaDeviceGetAttribute(&multiprocessor_count, cudaDevAttrMultiProcessorCount, device));
+
+    if ((params.block_table != nullptr) && (params.tensormaps == nullptr)) {
+        constexpr size_t SizeOfCuTensorMap = sizeof(cute::TmaDescriptor);
+        // Allocate gmem space for input tensormaps per each SM
+        cutlass::device_memory::allocation<uint64_t> tensormaps(SizeOfCuTensorMap * multiprocessor_count);
+        params.tensormaps = tensormaps.get();
+    }
+#ifdef C_DEBUG
+    bool is_page_cache = params.tensormaps != nullptr;
+    cute::print("is_page_cache ?  "); cute::print(is_page_cache ? "true" : "false"); cute::print("\n");
+#endif
+
     typename CollectiveMainloop::Params mainloop_params =
         CollectiveMainloop::to_underlying_arguments({
             static_cast<Element const*>(params.q_ptr),
@@ -60,8 +78,12 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
                 params.seqlen_k, params.d, params.h_k, params.b, 
                 params.v_row_stride, params.v_head_stride, params.v_batch_stride
             ),  // layout_V
-            reinterpret_cast<cute::TmaDescriptor*>(params.tma_load_K_page_ptr),
-            params.scale_softmax_log2
+            reinterpret_cast<cute::TmaDescriptor*>(params.tensormaps),
+            params.scale_softmax_log2,
+            params.block_table,
+            params.block_table_batch_stride,
+            params.page_block_size,
+            params.k_batch_stride
         });
 #ifdef C_DEBUG
 	//  layout_Q: (128,256,16,8):(4096,_1,256,524288)
@@ -140,10 +162,6 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
        CHECK_CUDA(cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
     }
 
-    int device;
-    cudaGetDevice(&device);
-    int multiprocessor_count;
-    CHECK_CUDA(cudaDeviceGetAttribute(&multiprocessor_count, cudaDevAttrMultiProcessorCount, device));
     dim3 grid_dims = Scheduler::get_grid_dim(scheduler_args, multiprocessor_count); // (132, 1, 1)
     static constexpr int ctaSize = Kernel_traits::kNWarps * 32;
     dim3 block_dims(ctaSize); // 384

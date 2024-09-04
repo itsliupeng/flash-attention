@@ -293,7 +293,13 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
         PipelineState smem_pipe_write = cutlass::make_producer_start_state<MainloopPipeline>(); 
         PipelineState smem_pipe_read, smem_pipe_release;
 
-        // collective_mainloop.load_init(mainloop_params, 0, 132);
+        cute::TmaDescriptor* tma_load_K_page_ptr = nullptr;
+        // for page attention: StaticPersistentTileScheduler using sm_count as grid_dim
+        if (mainloop_params.tensormaps != nullptr) {
+            const int block_idx = ((blockIdx.z * gridDim.y) + blockIdx.y) * gridDim.x + blockIdx.x;
+            constexpr int num_SM = 132;
+            tma_load_K_page_ptr = collective_mainloop.load_init(mainloop_params, num_SM, block_idx % num_SM);
+        }
 
         int work_idx = 0;
 
@@ -324,8 +330,9 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
                 }
             }
 
+            const int* current_block_table = mainloop_params.block_table + bidb * mainloop_params.block_table_batch_stride;
             collective_mainloop.load_fp8(
-                mainloop_params, pipeline_k, pipeline_k, pipeline_vt,
+                mainloop_params, tma_load_K_page_ptr, current_block_table, pipeline_k, pipeline_k, pipeline_vt,
                 smem_pipe_write, smem_pipe_read, shared_storage,
                 scheduler, scheduler_params, work_tile_info, block_coord, work_idx,
                 seqlen_traits_q, seqlen_traits_k);

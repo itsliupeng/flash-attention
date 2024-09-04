@@ -154,8 +154,12 @@ struct CollectiveMainloopFwd {
         typename Seqlen_traits::LayoutT layout_K;
         Element const* ptr_V;
         typename Seqlen_traits::LayoutT layout_V;
-        cute::TmaDescriptor* tma_load_K_page_ptr;
+        cute::TmaDescriptor* tensormaps;
         float const softmax_scale_log2;
+        int* block_table;
+        int64_t block_table_batch_stride;
+        int page_size;
+        int64_t page_stride;
     };
 
     // Device side kernel params
@@ -167,8 +171,14 @@ struct CollectiveMainloopFwd {
         TMA_Q tma_load_Q;        
         TMA_K tma_load_K;
         TMA_V tma_load_V;
-        cute::TmaDescriptor* tma_load_K_page_ptr;
+        cute::TmaDescriptor* tensormaps;
         float const softmax_scale_log2;
+        Element const* ptr_K;
+        int* block_table;
+        int64_t block_table_batch_stride;
+        int page_size;
+        int64_t page_stride;
+
         void print() const {
             cute::print(">>>>> in CollectiveMainloopFwd#Params\n");
             cute::print("\t layout_Q: "); cute::print(layout_Q); cute::print("\n"); // (128,256,16,8):(4096,_1,256,524288)
@@ -177,6 +187,10 @@ struct CollectiveMainloopFwd {
             cute::print("\t tma_load_Q: "); cute::print(tma_load_Q); cute::print("\n");
             cute::print("\t tma_load_K: "); cute::print(tma_load_K); cute::print("\n");
             cute::print("\t tma_load_V: "); cute::print(tma_load_V); cute::print("\n");
+            cute::print("\t block_table: "); cute::print(block_table); cute::print("\n");
+            cute::print("\t block_table_batch_stride: "); cute::print(block_table_batch_stride); cute::print("\n");
+            cute::print("\t page_size: "); cute::print(page_size); cute::print("\n");
+            cute::print("\t page_stride: "); cute::print(page_stride); cute::print("\n");
             cute::print("<<<<< in CollectiveMainloopFwd#Params\n");  
         };
     };
@@ -195,16 +209,21 @@ struct CollectiveMainloopFwd {
         cp_async_wait<0>();
     }
 
-    CUTLASS_DEVICE void
+    CUTLASS_DEVICE cute::TmaDescriptor*
     load_init(Params const& params, int32_t const sm_count, int32_t const sm_idx) const {
+        cute::TmaDescriptor* gmem_tensormaps = reinterpret_cast<cute::TmaDescriptor*>(params.tensormaps);
+        cute::TmaDescriptor* tma_desc = &gmem_tensormaps[sm_idx];
+
+        int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
         // Initialize tma for loading
-        if (cute::elect_one_sync()) {
+        if ((warp_idx_in_warpgroup == 0) && cute::elect_one_sync()) {
             // Bringing tensormaps from params to gmem for modification later
             // ptr[1024b](0x7f0d4de00000) o _1:_1
             Tensor pC_tensormap = make_tensor(params.tma_load_K.get_tma_descriptor(), Int<1>{}, Int<1>{});
-            Tensor gC_tensormap = make_tensor(params.tma_load_K_page_ptr, Int<1>{}, Int<1>{});
+            Tensor gC_tensormap = make_tensor(make_gmem_ptr(tma_desc), Int<1>{}, Int<1>{});
             copy(recast<uint128_t>(pC_tensormap), recast<uint128_t>(gC_tensormap));
         }
+        return tma_desc;
     }
 
     static Params
@@ -233,8 +252,13 @@ struct CollectiveMainloopFwd {
         return {args.layout_Q, args.layout_K, args.layout_V,
                 cutlass::FastDivmod(cute::ceil_div(get<2>(args.layout_Q.shape()), get<2>(args.layout_K.shape()))),
                 tma_load_Q, tma_load_K, tma_load_V,
-                args.tma_load_K_page_ptr,
-                args.softmax_scale_log2};
+                args.tensormaps,
+                args.softmax_scale_log2,
+                args.ptr_K,
+                args.block_table,
+                args.block_table_batch_stride,
+                args.page_size,
+                args.page_stride};
     }
 
     /// Issue Tma Descriptor Prefetch -- ideally from a single thread for best performance
@@ -377,6 +401,8 @@ struct CollectiveMainloopFwd {
     template <typename Scheduler, typename SharedStorage>
     CUTLASS_DEVICE void
     load_fp8(Params const& mainloop_params,
+         cute::TmaDescriptor* tma_load_K_page_ptr,
+         const int *block_table,
          MainloopPipeline pipeline_k,
          MainloopPipeline pipeline_v,
          MainloopPipelineNoTMA pipeline_vt,         
@@ -422,7 +448,11 @@ struct CollectiveMainloopFwd {
             }
         };
 
-        auto tma_load_K_page_ptr = mainloop_params.tma_load_K_page_ptr;
+        cute::TmaDescriptor* tma_load_K_desc_ptr = const_cast<cute::TmaDescriptor*>(mainloop_params.tma_load_K.get_tma_descriptor());
+        bool is_page_cache = tma_load_K_page_ptr != nullptr;
+        if (is_page_cache) {
+            tma_load_K_desc_ptr = tma_load_K_page_ptr;
+        }
 
         Tensor mQ = mainloop_params.tma_load_Q.get_tma_tensor(mainloop_params.layout_Q.shape());
         Tensor mK = mainloop_params.tma_load_K.get_tma_tensor(mainloop_params.layout_K.shape()); // (s, h, n, b)
@@ -546,7 +576,7 @@ struct CollectiveMainloopFwd {
         } else {
             if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                 pipeline_k.producer_acquire(smem_pipe_write);
-                copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                     tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
                 // pipeline_v.producer_acquire(smem_pipe_write);
                 // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
@@ -572,7 +602,7 @@ struct CollectiveMainloopFwd {
             for (int iter = 0; iter < extra_iterations && n_block >= 0; ++iter) {
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     pipeline_k.producer_acquire(smem_pipe_write);
-                    copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                    copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                         tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
                     // pipeline_v.producer_acquire(smem_pipe_write);
                     // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
@@ -596,7 +626,7 @@ struct CollectiveMainloopFwd {
                 
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     pipeline_k.producer_acquire(smem_pipe_write);
-                    copy(mainloop_params.tma_load_K.with(*pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
+                    copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                         tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
                     // pipeline_v.producer_acquire(smem_pipe_write);
                     // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
