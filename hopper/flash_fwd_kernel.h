@@ -294,12 +294,13 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
         PipelineState smem_pipe_read, smem_pipe_release;
 
         cute::TmaDescriptor* tma_load_K_page_ptr = nullptr;
+
         // for page attention: StaticPersistentTileScheduler using sm_count as grid_dim
-        if (mainloop_params.tensormaps != nullptr) {
-            const int block_idx = ((blockIdx.z * gridDim.y) + blockIdx.y) * gridDim.x + blockIdx.x;
-            constexpr int num_SM = 132;
-            tma_load_K_page_ptr = collective_mainloop.load_init(mainloop_params, num_SM, block_idx % num_SM);
-        }
+        // if (mainloop_params.tensormaps != nullptr) {
+        //     const int block_idx = ((blockIdx.z * gridDim.y) + blockIdx.y) * gridDim.x + blockIdx.x;
+        //     constexpr int num_SM = 132;
+        //     // tma_load_K_page_ptr = collective_mainloop.load_init(mainloop_params, block_idx % num_SM);
+        // }
 
         int work_idx = 0;
 

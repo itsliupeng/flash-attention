@@ -210,7 +210,7 @@ struct CollectiveMainloopFwd {
     }
 
     CUTLASS_DEVICE cute::TmaDescriptor*
-    load_init(Params const& params, int32_t const sm_count, int32_t const sm_idx) const {
+    load_init(Params const& params, int32_t const sm_idx) const {
         cute::TmaDescriptor* gmem_tensormaps = reinterpret_cast<cute::TmaDescriptor*>(params.tensormaps);
         cute::TmaDescriptor* tma_desc = &gmem_tensormaps[sm_idx];
 
@@ -218,11 +218,13 @@ struct CollectiveMainloopFwd {
         // Initialize tma for loading
         if ((warp_idx_in_warpgroup == 0) && cute::elect_one_sync()) {
             // Bringing tensormaps from params to gmem for modification later
-            // ptr[1024b](0x7f0d4de00000) o _1:_1
             Tensor pC_tensormap = make_tensor(params.tma_load_K.get_tma_descriptor(), Int<1>{}, Int<1>{});
-            Tensor gC_tensormap = make_tensor(make_gmem_ptr(tma_desc), Int<1>{}, Int<1>{});
+            Tensor gC_tensormap = make_tensor(tma_desc, Int<1>{}, Int<1>{});
             copy(recast<uint128_t>(pC_tensormap), recast<uint128_t>(gC_tensormap));
+            cp_async_fence();
+            cp_async_wait<0>();
         }
+        __syncwarp();
         return tma_desc;
     }
 
@@ -439,14 +441,16 @@ struct CollectiveMainloopFwd {
         using SmemLayoutTransposeVt = typename Ktraits::SmemLayoutTransposeVt;
 
         auto smem_k_tensormap = shared_storage.smem_k_tensormap;
-        // SmemLayoutQ: Sw<2,4,3> o smem_ptr[8b](unset) o (_128,(_64,_9)):(_64,(_1,_8192))
+        // Sw<2,4,3>_smem_ptr[8b](0x7f6a00000400) o (_128,(_64,_9)):(_64,(_1,_8192)
         Tensor sQ = make_tensor(make_smem_ptr(shared_storage.smem_q.data()), SmemLayoutQ{});
         // Tensor sK = make_tensor(make_smem_ptr(shared_storage.smem_v.smem_v.data()), SmemLayoutK{});
-        // SmemLayoutK: Sw<2,4,3> o smem_ptr[8b](unset) o (_64,(_64,_9),_2):(_64,(_1,_4096),_36864)
+        // Sw<2,4,3>_smem_ptr[8b](0x7f6a00012400) o (_64,(_64,_9),_2):(_64,(_1,_4096),_36864)
         Tensor sV = make_tensor(make_smem_ptr(shared_storage.smem_v.smem_v.data()), SmemLayoutK{});
         Tensor sK = sV;
         
+        // sV_divide: smem_ptr[8b](0x7f6a00012400) o Sw<2,4,3> o _0 o (((_8,_8),(_16,_4)),_1,_8,_2):(((_64,_512),(_1,_16)),_0,_4096,_32768)
         Tensor sV_divide = as_position_independent_swizzle_tensor(make_tensor(make_smem_ptr(shared_storage.smem_v.smem_v.data()), SmemLayoutTransposeV{}));
+        // sVt_divide: smem_ptr[8b](0x7f6a00024400) o Sw<2,4,3> o _0 o (((_16,_4),(_8,_8)),_1,_8,_2):(((_1,_16),(_64,_512)),_0,_4096,_32768)
         Tensor sVt_divide = as_position_independent_swizzle_tensor(make_tensor(make_smem_ptr(shared_storage.smem_v.smem_v_out.data()), SmemLayoutTransposeVt{}));
 
         auto smem_transpose_V = SmemTransposeFp8_64x64();
@@ -460,11 +464,43 @@ struct CollectiveMainloopFwd {
                 }
             }
         };
+
+        //
+        // update TMA gloabl addr
+        //
+        const int block_idx = ((blockIdx.z * gridDim.y) + blockIdx.y) * gridDim.x + blockIdx.x;
+        constexpr int num_SM = 132;
+        int sm_idx = block_idx %  num_SM;
+        cute::TmaDescriptor* gmem_tensormaps = reinterpret_cast<cute::TmaDescriptor*>(mainloop_params.tensormaps);
+        cute::TmaDescriptor* tma_desc = &gmem_tensormaps[sm_idx];
+
+        int lane_predicate = cute::elect_one_sync();
+        int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
+        // Initialize tma for loading
+        if ((warp_idx_in_warpgroup == 0) && lane_predicate) {
+            // Bringing tensormaps from params to gmem for modification later
+            cute::Tensor pC_tensormap = make_tensor(mainloop_params.tma_load_K.get_tma_descriptor(), Int<1>{}, Int<1>{});
+            cute::Tensor gC_tensormap = make_tensor(tma_desc, Int<1>{}, Int<1>{});
+#ifdef MLA_DEBUG
+            if (blockIdx.x == 0) {
+                print("update tma: "); print(tma_desc); print("\n");
+                print("sQ: "); print(sQ); print("\n");
+                print("sV: "); print(sV); print("\n");
+                print("sV_divide: "); print(sV_divide); print("\n");
+                print("sVt_divide: "); print(sVt_divide); print("\n");
+
+            }
+#endif
+            cute::copy(recast<uint128_t>(pC_tensormap), recast<uint128_t>(gC_tensormap));
+            // cp_async_fence();
+            // cp_async_wait<0>();
+        }
         
         cute::TmaDescriptor* tma_load_K_desc_ptr = const_cast<cute::TmaDescriptor*>(mainloop_params.tma_load_K.get_tma_descriptor());
-        bool is_page_cache = tma_load_K_page_ptr != nullptr;
+        // bool is_page_cache = tma_load_K_page_ptr != nullptr;
+        bool is_page_cache = false;
         if (is_page_cache) {
-            tma_load_K_desc_ptr = tma_load_K_page_ptr;
+            tma_load_K_desc_ptr = tma_desc;
         }
         
 
@@ -516,9 +552,24 @@ struct CollectiveMainloopFwd {
         }
         int n_block = n_block_max - 1;
 
-        int lane_predicate = cute::elect_one_sync();
-        int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
-
+#ifdef MLA_DEBUG
+        if (thread0()) {
+            print("n_block_max: "); print(n_block_max); print("\n"); // 2
+            print("page_size: "); print(page_size); print("\n"); // 128
+            print("page_stride: "); print(page_stride); print("\n"); // 73728 = 128 * 576
+            print("ptr_K: "); print(ptr_K); print("\n"); // ptr[8b](0x7f1e0fed8000)
+            print("tKgK: "); print(tKgK); print("\n"); // ArithTuple(_0,_0,0,1) o (((_64,_64),_9),2):(((_1@0,_1@1),_64@0),_64@1)
+            print("tKsK: "); print(tKsK); print("\n"); // Sw<2,4,3>_smem_ptr[8b](0x7f1f00012400) o ((_4096,_9),_2):((_1,_4096),_36864)
+            print("tQgQ: "); print(tQgQ); print("\n"); // ArithTuple(_0,0,8,2) o (((_64,_128),_9)):(((_1@0,_1@1),_64@0))
+            print("tQsQ: "); print(tQsQ); print("\n"); // Sw<2,4,3>_smem_ptr[8b](0x7f1f00000400) o ((_8192,_9)):((_1,_8192))
+            print("sQ_x: "); print(sQ_x); print("\n"); // Sw<2,4,3>_smem_ptr[8b](0x7f1f00000400) o ((_128,(_64,_9)),_1):((_64,(_1,_8192)),_0)
+            print("gQ_x: "); print(gQ_x); print("\n"); // ArithTuple(_0,0,8,2) o ((_128,_576),_1):((_1@1,_1@0),_0)
+            print("gQ: "); print(gQ); print("\n"); // ArithTuple(_0,0,8,2) o (_128,_576):(_1@1,_1@0)
+            print("gK: "); print(gK); print("\n"); // ArithTuple(_0,_0,0,2) o (_64,_576,2):(_1@1,_1@0,_64@1)
+            print("mQ: "); print(mQ); print("\n"); // ArithTuple(_0,_0,_0,_0) o (1,576,128,4):(_1@1,_1@0,_1@2,_1@3)
+            print("mK: "); print(mK); print("\n"); // ArithTuple(_0,_0,_0,_0) o (128,576,1,4):(_1@1,_1@0,_1@2,_1@3)
+        }
+#endif
         // Wait for the MMA warpgroups to say that smem_q is ready
         // for fp8, change from NumThreadsPerWarp to NumThreadsPerWarpGroup ??
         cutlass::arch::NamedBarrier::sync(NumMmaThreads + cutlass::NumThreadsPerWarpGroup, static_cast<int>(FwdNamedBarriers::QueryEmpty) /*id*/); // 128 * 2 + 128
