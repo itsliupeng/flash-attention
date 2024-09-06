@@ -64,7 +64,7 @@ int main(int argc, const char *argv[]) {
 
     // auto q_view = q.view({batch_size, num_heads, seqlen_q, head_size});
     std::vector<at::Tensor> result;
-    for (int i = 0; i < 1; i++) {
+    for (int i = 0; i < 10; i++) {
         printf("calling iter %d\n", i);
         result = mla_kvcache_fwd(q, cache, seqlens, block_table, out_, 1.0f);
         // torch::cuda::synchronize();
