@@ -89,7 +89,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
     CollectiveMainloop collective_mainloop;
     CollectiveEpilogue collective_epilogue;
 
-#ifdef C_DEBUG
+#ifdef MLA_DEBUG
     if (cute::thread0()) {
         cute::print("\t NumMmaThreads: "); cute::print(NumMmaThreads); cute::print("\n");
         cute::print("\t NumCopyThreads: "); cute::print(NumCopyThreads); print("\n");
@@ -365,7 +365,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
             Tensor tOrO = partition_fragment_C(tiled_mma1, select<0, 1>(Mma1_TileShape_MNK{}));
             flash::Softmax<2 * (2 * kBlockM / NumMmaThreads), Use_max_offset> softmax; // 2 * (2 * 128 / 256) = 2
 
-// #ifdef C_DEBUG
+// #ifdef MLA_DEBUG
 //     if (cute::thread(0+NumCopyThreads+32)) {
 //     // if (cute::block0()) {
 //         // ptr[32b](0x7f0ebdfff710) o ((_2,_2,_32),_1,_2):((_1,_2,_4),_0,_128)

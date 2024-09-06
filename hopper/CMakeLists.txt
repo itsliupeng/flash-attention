@@ -27,7 +27,7 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 # set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O0 -g -G")
 # set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O0 -lineinfo --expt-relaxed-constexpr --use_fast_math -gencode arch=compute_90a,code=sm_90a")
 # set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O0 -g  -lineinfo --expt-relaxed-constexpr --use_fast_math -gencode arch=compute_90a,code=sm_90a")
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O2 -g -lineinfo --expt-relaxed-constexpr --use_fast_math -gencode arch=compute_90a,code=sm_90a")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O0 -g -lineinfo --expt-relaxed-constexpr --use_fast_math -gencode arch=compute_90a,code=sm_90a")
 # set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O0 -g -lineinfo --expt-relaxed-constexpr --use_fast_math -gencode arch=compute_90a,code=sm_90a")
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --ptxas-options=--verbose,--warn-on-local-memory-usage -Xnvlink=--verbose -Xptxas=--verbose")
 
@@ -60,8 +60,8 @@ add_definitions(-DFLASHATTENTION_DISABLE_ALIBI)
 add_definitions(-DFLASHATTENTION_DISABLE_DROPOUT)
 add_definitions(-DFLASHATTENTION_DISABLE_UNEVEN_K)
 add_definitions(-DFLASHATTENTION_DISABLE_LOCAL)
+add_definitions(-DC_DEBUG)
 add_definitions(-DMLA_DEBUG)
-# add_definitions(-DC_DEBUG)
 # add_definitions(-DLP_DEBUG)
 
 # Create a shared library

@@ -488,10 +488,11 @@ struct CollectiveMainloopFwd {
                 print("sV: "); print(sV); print("\n");
                 print("sV_divide: "); print(sV_divide); print("\n");
                 print("sVt_divide: "); print(sVt_divide); print("\n");
-
+                print("cute::recast<uint128_t>(pC_tensormap): "); print(cute::recast<uint128_t>(pC_tensormap)); print("\n");
+                print("cute::recast<uint128_t>(gC_tensormap): "); print(cute::recast<uint128_t>(gC_tensormap)); print("\n");
             }
 #endif
-            cute::copy(recast<uint128_t>(pC_tensormap), recast<uint128_t>(gC_tensormap));
+            cute::copy(cute::recast<uint128_t>(pC_tensormap), cute::recast<uint128_t>(gC_tensormap));
             // cp_async_fence();
             // cp_async_wait<0>();
         }

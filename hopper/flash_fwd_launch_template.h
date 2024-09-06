@@ -17,6 +17,7 @@
 #include "kernel_traits.h"
 #include "seq_len.h"
 #include "utils.h"
+#include <cuda.h>
 
 
 constexpr static int Stages = 2;
@@ -53,10 +54,13 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
     if ((params.block_table != nullptr) && (params.tensormaps == nullptr)) {
         constexpr size_t SizeOfCuTensorMap = sizeof(cute::TmaDescriptor);
         // Allocate gmem space for input tensormaps per each SM
-        cutlass::device_memory::allocation<uint8_t> tensormaps(SizeOfCuTensorMap * multiprocessor_count);
-        params.tensormaps = tensormaps.get();
+        // cutlass::device_memory::allocation<uint8_t> tensormaps(SizeOfCuTensorMap * multiprocessor_count);
+        // params.tensormaps = tensormaps.get();
+
+        cudaMalloc((void**)&params.tensormaps, SizeOfCuTensorMap * multiprocessor_count);
+
     }
-#ifdef C_DEBUG
+#ifdef MLA_DEBUG
     bool is_page_cache = params.tensormaps != nullptr;
     cute::print("is_page_cache ?  "); cute::print(is_page_cache ? "true" : "false"); cute::print("\n");
 #endif
@@ -85,7 +89,7 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
             params.page_block_size,
             params.k_batch_stride
         });
-#ifdef C_DEBUG
+#ifdef MLA_DEBUG
 	//  layout_Q: (128,256,16,8):(4096,_1,256,524288)
 	//  layout_K: (128,256,16,8):(4096,_1,256,524288)
 	//  layout_V: (128,256,16,8):(4096,_1,256,524288)
@@ -146,7 +150,7 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
     else
         kernel = (void *)flash::compute_attn_ws<Kernel_traits, Is_causal, Scheduler, Seqlen_traits>;
     int smem_size = sizeof(typename Kernel_traits::SharedStorage);
-#ifdef C_DEBUG
+#ifdef MLA_DEBUG
     int smem_size_q = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_q));
     // int smem_size_k = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_k));
     int smem_size_v = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_v));
@@ -171,6 +175,12 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
         launch_params, kernel, mainloop_params, epilogue_params, 
         scheduler_params, seqlen_traits_q, seqlen_traits_k);
     CHECK_CUDA_KERNEL_LAUNCH();
+
+    // free 
+    if ((params.block_table != nullptr) && (params.tensormaps != nullptr)) {
+        // cudaFree(params.tensormaps);
+    }
+
 }
 
 template<typename T>

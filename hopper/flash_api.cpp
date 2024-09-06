@@ -153,7 +153,7 @@ void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split
     // HEADDIM_SWITCH(params.d, [&] {
     //     run_mha_fwd_<cutlass::half_t, kHeadSize>(params, stream);
     // });
-#ifdef MLA_DEBUG
+#ifdef C_DEBUG
     printf("calling fp8_kernel\n");
     // if (params.d == 128) {
     //     run_mha_fwd_<cutlass::float_e4m3_t, 128>(params, stream);
@@ -630,7 +630,7 @@ mla_kvcache_fwd(at::Tensor &q,   // batch_size x 1 x num_heads x head_size
 
 
 
-#ifndef MLA_DEBUG
+#ifndef C_DEBUG
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.doc() = "FlashAttention";
     m.def("fwd", &mha_fwd, "Forward pass");
