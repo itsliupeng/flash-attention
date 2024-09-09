@@ -542,6 +542,11 @@ mla_kvcache_fwd(at::Tensor &q,   // batch_size x 1 x num_heads x head_size
     }
 
     at::Tensor out;
+    int out_head_size = head_size_og;
+    if (head_size_og == 576) {
+        out_head_size = 512;
+    }
+    
     if (out_.has_value()) {
         out = out_.value();
         // TORCH_CHECK(out.dtype() == q_dtype, "Output must have the same dtype as inputs");
@@ -552,16 +557,12 @@ mla_kvcache_fwd(at::Tensor &q,   // batch_size x 1 x num_heads x head_size
                 "not fp8, or fp16 for fp8 input.");
         CHECK_DEVICE(out);
         TORCH_CHECK(out.stride(-1) == 1, "Output tensor must have contiguous last dimension");
-        if (head_size_og == 576) {
-            CHECK_SHAPE(out, batch_size, seqlen_q, num_heads, 512);
-        } else{
-            CHECK_SHAPE(out, batch_size, seqlen_q, num_heads, head_size_og);
-        }
+        CHECK_SHAPE(out, batch_size, seqlen_q, num_heads, head_size_og);
     } else {
         if (q_dtype == at::ScalarType::Float8_e4m3fn)
-            out = torch::empty({batch_size, seqlen_q, num_heads, head_size_og}, q.options().dtype(torch::kHalf));
+            out = torch::empty({batch_size, seqlen_q, num_heads, out_head_size}, q.options().dtype(torch::kHalf));
         else
-            out = torch::empty({batch_size, seqlen_q, num_heads, head_size_og}, q.options());
+            out = torch::empty({batch_size, seqlen_q, num_heads, out_head_size}, q.options());
     }
 
     auto round_multiple = [](int x, int m) { return (x + m - 1) / m * m; };
