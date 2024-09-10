@@ -349,12 +349,11 @@ __forceinline__ __device__ void write_O(
     }
 }
 
-template<<typename Element>
-__forceinline__ __device__ int64_t resolve_page_slice_offset(const int* block_table, const int n_block, const int kBlockN, const int page_size, const int page_stride) {
+__forceinline__ __device__ int64_t resolve_page_slice_offset(const int* block_table, const int n_block, const int kBlockN, const int page_size, const int page_stride, const int row_stride) {
     const int64_t block_offset = n_block * kBlockN;
     const int64_t virtual_page_idx = block_offset / page_size;
     const int64_t page_offset = block_offset % page_size;
-    const int64_t global_offset =  (int64_t) block_table[virtual_page_idx] * ((int64_t) page_stride) + page_offset;
+    const int64_t global_offset =  (int64_t) block_table[virtual_page_idx] * ((int64_t) page_stride) + page_offset * row_stride;
     return global_offset;
 }
 

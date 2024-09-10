@@ -87,7 +87,8 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
             params.block_table,
             params.block_table_batch_stride,
             params.page_block_size,
-            params.k_batch_stride
+            params.k_batch_stride,
+            params.k_row_stride
         });
 #ifdef MLA_DEBUG
 	//  layout_Q: (128,256,16,8):(4096,_1,256,524288)

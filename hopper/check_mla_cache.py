@@ -5,12 +5,13 @@ from flash_attn_interface import flash_attn_func, flash_attn_varlen_func, flash_
 # S = 128
 N = 128
 # H = 256
-B, H, S = 132, 576, 128
+B, H, S = 132 * 2, 576, 128
 
-num_blocks = 2
+num_blocks = 8
+# must be 64, consistent with block_N in smem.
 block_size = 64
 
-seqlen = 256
+seqlen = 64 * 4
 
 q = torch.rand(B, N, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
 # q = torch.rand(B, 1, N, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
@@ -18,16 +19,18 @@ cache = torch.rand(num_blocks, block_size, 1, H, dtype=torch.float16, device="cu
 cache_seqlens = torch.tensor([seqlen] * B, dtype=torch.int32, device="cuda")
 block_table = torch.randint(1, num_blocks, (B, (seqlen + block_size - 1)//block_size), dtype=torch.int32, device="cuda")
 
-print(q.shape)
-print(cache.shape)
 print(block_table)
-
 
 for i in range(1):
     out = flash_attn_with_kvcache(q, cache, cache, cache_seqlens=cache_seqlens, block_table=block_table, causal=False)
     # print(out)
     print(f"iter {i}")
 print(out.shape)
+torch.cuda.synchronize()
+print(q.shape)
+print(cache.shape)
+print(block_table.shape)
+# print(block_table)
 
 
 
