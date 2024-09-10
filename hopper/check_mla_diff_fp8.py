@@ -32,11 +32,13 @@ block_size = 64
 print(f"is_causal: {is_causal}")
 
 print(">>>>> MHA")
-for S in [128, 512, 1024]:
+# for S in [128, 512, 1024]:
+for S in [1, 4, 4, 7, 9, 32, 64, 96, 128]:
 # for S in [2048, 4096, 8192]:
-    for H in [128, 256]:
+    for H in [256]:
     # for H in [512, 576]:
-        for B in [8, 16, 32, 64]:
+        for B in [1]:
+        # for B in [8, 16, 32, 64]:
             q = torch.rand(B, N, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
             cache = torch.rand(num_blocks, block_size, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
             cache_seqlens = torch.tensor([S] * B, dtype=torch.int32, device="cuda")
