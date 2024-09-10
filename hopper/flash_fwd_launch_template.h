@@ -178,7 +178,7 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
 
     // free 
     if ((params.block_table != nullptr) && (params.tensormaps != nullptr)) {
-        // cudaFree(params.tensormaps);
+        cudaFree(params.tensormaps);
     }
 
 }

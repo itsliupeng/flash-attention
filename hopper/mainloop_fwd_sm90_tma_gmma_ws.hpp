@@ -464,44 +464,12 @@ struct CollectiveMainloopFwd {
                 }
             }
         };
-
-        //
-        // update TMA gloabl addr
-        //
-        const int block_idx = ((blockIdx.z * gridDim.y) + blockIdx.y) * gridDim.x + blockIdx.x;
-        constexpr int num_SM = 132;
-        int sm_idx = block_idx %  num_SM;
-        cute::TmaDescriptor* gmem_tensormaps = reinterpret_cast<cute::TmaDescriptor*>(mainloop_params.tensormaps);
-        cute::TmaDescriptor* tma_desc = &gmem_tensormaps[sm_idx];
-
-        int lane_predicate = cute::elect_one_sync();
-        int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
-        // Initialize tma for loading
-        if ((warp_idx_in_warpgroup == 0) && lane_predicate) {
-            // Bringing tensormaps from params to gmem for modification later
-            cute::Tensor pC_tensormap = make_tensor(mainloop_params.tma_load_K.get_tma_descriptor(), Int<1>{}, Int<1>{});
-            cute::Tensor gC_tensormap = make_tensor(tma_desc, Int<1>{}, Int<1>{});
-#ifdef MLA_DEBUG
-            if (blockIdx.x == 0) {
-                print("update tma: "); print(tma_desc); print("\n");
-                print("sQ: "); print(sQ); print("\n");
-                print("sV: "); print(sV); print("\n");
-                print("sV_divide: "); print(sV_divide); print("\n");
-                print("sVt_divide: "); print(sVt_divide); print("\n");
-                print("cute::recast<uint128_t>(pC_tensormap): "); print(cute::recast<uint128_t>(pC_tensormap)); print("\n");
-                print("cute::recast<uint128_t>(gC_tensormap): "); print(cute::recast<uint128_t>(gC_tensormap)); print("\n");
-            }
-#endif
-            cute::copy(cute::recast<uint128_t>(pC_tensormap), cute::recast<uint128_t>(gC_tensormap));
-            // cp_async_fence();
-            // cp_async_wait<0>();
-        }
         
         cute::TmaDescriptor* tma_load_K_desc_ptr = const_cast<cute::TmaDescriptor*>(mainloop_params.tma_load_K.get_tma_descriptor());
-        // bool is_page_cache = tma_load_K_page_ptr != nullptr;
-        bool is_page_cache = false;
+        bool is_page_cache = tma_load_K_page_ptr != nullptr;
+        // bool is_page_cache = false;
         if (is_page_cache) {
-            tma_load_K_desc_ptr = tma_desc;
+            tma_load_K_desc_ptr = tma_load_K_page_ptr;
         }
         
 
@@ -555,6 +523,10 @@ struct CollectiveMainloopFwd {
 
 #ifdef MLA_DEBUG
         if (thread0()) {
+            print("sQ: "); print(sQ); print("\n");
+            print("sV: "); print(sV); print("\n");
+            print("sV_divide: "); print(sV_divide); print("\n");
+            print("sVt_divide: "); print(sVt_divide); print("\n");
             print("is_page_cache: "); print(is_page_cache); print("\n"); // 2
             print("n_block_max: "); print(n_block_max); print("\n"); // 2
             print("page_size: "); print(page_size); print("\n"); // 128
@@ -572,6 +544,8 @@ struct CollectiveMainloopFwd {
             print("mK: "); print(mK); print("\n"); // ArithTuple(_0,_0,_0,_0) o (128,576,1,4):(_1@1,_1@0,_1@2,_1@3)
         }
 #endif
+        int lane_predicate = cute::elect_one_sync();
+        int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
         // Wait for the MMA warpgroups to say that smem_q is ready
         // for fp8, change from NumThreadsPerWarp to NumThreadsPerWarpGroup ??
         cutlass::arch::NamedBarrier::sync(NumMmaThreads + cutlass::NumThreadsPerWarpGroup, static_cast<int>(FwdNamedBarriers::QueryEmpty) /*id*/); // 128 * 2 + 128
