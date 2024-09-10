@@ -24,7 +24,7 @@ N = 128
 B, H, S = 8, 256, 128
 
 is_causal = False
-num_blocks = 32
+num_blocks = 2
 block_size = 64
 
 
@@ -33,7 +33,7 @@ print(f"is_causal: {is_causal}")
 
 print(">>>>> MHA")
 # for S in [128, 512, 1024]:
-for S in [1, 4, 4, 7, 9, 32, 64, 96, 128]:
+for S in [128]:
 # for S in [2048, 4096, 8192]:
     for H in [256]:
     # for H in [512, 576]:
@@ -42,7 +42,8 @@ for S in [1, 4, 4, 7, 9, 32, 64, 96, 128]:
             q = torch.rand(B, N, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
             cache = torch.rand(num_blocks, block_size, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
             cache_seqlens = torch.tensor([S] * B, dtype=torch.int32, device="cuda")
-            block_table = torch.randint(0, num_blocks, (B, (S + block_size - 1)//block_size), dtype=torch.int32, device="cuda")
+            # block_table = torch.randint(0, num_blocks, (B, (S + block_size - 1)//block_size), dtype=torch.int32, device="cuda")
+            block_table = torch.tensor([[0, 1]], dtype=torch.int32, device="cuda")
             
             expanded_block_table = block_table.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
             gathered_data = cache.to(torch.float16)[expanded_block_table].to(torch.float8_e4m3fn)
@@ -58,17 +59,18 @@ for S in [1, 4, 4, 7, 9, 32, 64, 96, 128]:
             #     f_o = f_o[...,:512]
 
             # f_o, _ = flash_attn_func(q.to(torch.float16), k.to(torch.float16), v.to(torch.float16), causal=is_causal)
-            # fa2_o = vllm_flash_attn_func(q.to(torch.float16), gathered_data.to(torch.float16), gathered_data.to(torch.float16), causal=is_causal)
-            fa3_o, _ = flash_attn_func(q.to(torch.float16), gathered_data.to(torch.float16), gathered_data.to(torch.float16), causal=is_causal)
-            fa2_o = fa3_o
+            fa2_o = vllm_flash_attn_func(q.to(torch.float16), gathered_data.to(torch.float16), gathered_data.to(torch.float16), causal=is_causal)
+            # fa3_o, _ = flash_attn_func(q.to(torch.float16), gathered_data.to(torch.float16), gathered_data.to(torch.float16), causal=is_causal)
+            fa2_o = fa2_o
             # o, _ = flash_attn_func(q, gathered_data, gathered_data, causal=is_causal)
             o = flash_attn_with_kvcache(q, cache, cache, cache_seqlens=cache_seqlens, block_table=block_table, causal=is_causal)
                 
             # torch.cuda.synchronize()
-
+            
             equivalent = torch.allclose(o, fa2_o, rtol=0, atol=0.02)
             diff = abs(o.to(torch.float32) - fa2_o.to(torch.float32))
-            print(f"{S} - {H} - {B}, {q.shape},  Same ? {equivalent}, {diff.max()} - {diff.sum()}")
+            cache_diff = abs(cache.view(B, -1, 1, H).to(torch.float32) - gathered_data.to(torch.float32))
+            print(f"{S} - {H} - {B}, {q.shape},  Same ? {equivalent}, {diff.max()} - {diff.sum()}; cache_diff: {cache_diff.max()}")
             
             # import ipdb; ipdb.set_trace()
             

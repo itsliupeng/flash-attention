@@ -60,6 +60,9 @@ public:
     std::cout << "in SeqLenTraits >>>>>" << std::endl;
     cute::print("\t sum_s: "); cute::print(sum_s); cute::print("\n");
     cute::print("\t cu_seq_len: "); cute::print(cu_seq_len); cute::print("\n");
+    // if (cu_seq_len != nullptr) {
+    //   cute::print("\t cu_seq_len[0]: "); cute::print(cu_seq_len[0]); cute::print("\n");
+    // }
     cute::print("\t seq_used: "); cute::print(seq_used); cute::print("\n");
     cute::print("\t actual_seq_len: "); cute::print(actual_seq_len); cute::print("\n");
     cute::print("\t LayoutT: "); cute::print(LayoutT{}); cute::print("\n");
@@ -87,7 +90,14 @@ public:
                        make_stride(int64_t(h * m), int64_t(m), cute::_1()));
   }
 
-  CUTLASS_DEVICE void init(int bidb) {}
+  CUTLASS_DEVICE void init(int bidb) {
+    // support page cache
+    if (seq_used) {
+      actual_seq_len = seq_used[bidb];
+    } else if (cu_seq_len) {
+      actual_seq_len = cu_seq_len[bidb];
+    }
+  }
 
   template <typename MTensor, typename Shape>
   CUTLASS_DEVICE auto get_local_tile_tensor(
@@ -138,7 +148,7 @@ CUTLASS_HOST_DEVICE auto VarSeqLenTraits::get_lse_gmem_layout(
 template <>
 CUTLASS_DEVICE void VarSeqLenTraits::init(int bidb) {
   actual_seq_len = 
-      seq_used ? seq_used[bidb] : (cu_seq_len[bidb + 1] - cu_seq_len[bidb]);
+    seq_used ? seq_used[bidb] : (cu_seq_len[bidb + 1] - cu_seq_len[bidb]);
 }
 
 template <>

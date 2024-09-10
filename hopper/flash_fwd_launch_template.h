@@ -158,8 +158,8 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
     printf("smem_size = %d, q = %d, k = %d, v = %d, o = %d.\n", smem_size, smem_size_q, 0, smem_size_v, smem_size_o);
     Kernel_traits kernel_traits;
     kernel_traits.print();
-    Seqlen_traits seqlen_traits;
-    seqlen_traits.print();
+    // Seqlen_traits seqlen_traits;
+    seqlen_traits_k.print();
     CollectiveEpilogue::print();
 #endif
     if (smem_size >= 48 * 1024) {
@@ -270,7 +270,8 @@ template<typename T>
 void run_mha_fwd_hdim256_fp8(Flash_fwd_params &params, cudaStream_t stream) {
     constexpr static int Headdim = 256; 
     constexpr static int kBlockM = 128;
-    constexpr static int kBlockN = 128;
+    // constexpr static int kBlockN = 128;
+    constexpr static int kBlockN = 64;
     constexpr static int kNWarps = 4 + kBlockM/16; // 12
     constexpr static int kStages = Stages_fp8;    
     BOOL_SWITCH(params.is_causal, Is_causal, [&] {

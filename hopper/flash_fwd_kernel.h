@@ -317,6 +317,11 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
                 if (m_block * kBlockM >= seqlen_traits_q.actual_seq_len) {
                     continue;
                 }
+            } else {
+                if (mainloop_params.tensormaps != nullptr) {
+                    // update seqlen when using page cache 
+                    seqlen_traits_k.init(bidb);
+                }
             }
             // todo: change to use block_info#actual_seq_k when using kvcache. oob whill be 0 thanks to TMA
             int n_block_max = collective_mainloop.get_n_block_max(

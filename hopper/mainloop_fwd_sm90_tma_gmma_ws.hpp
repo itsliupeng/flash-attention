@@ -17,6 +17,10 @@
 #include "named_barrier.hpp"
 #include "utils.h"
 
+
+#define PRINT_DEBUG_SITE() \
+    printf("current PC at File: %s, Line: %d, Function: %s\n", __FILE__, __LINE__, __func__)
+
 namespace flash {
 
 using namespace cute;
@@ -275,12 +279,13 @@ struct CollectiveMainloopFwd {
     int get_n_block_max(
           Params const& mainloop_params, int m_block, 
           const Seqlen_traits& seqlen_traits_q,
-          const Seqlen_traits& seqlen_traits_k
+          const Seqlen_traits& seqlen_traits_k,
+          bool is_page_cache=false
         ) {
         static constexpr int kBlockM = get<0>(TileShape_MNK{}); // 128
-        static constexpr int kBlockN = get<1>(TileShape_MNK{}); // 80 
+        static constexpr int kBlockN = get<1>(TileShape_MNK{}); // 64 
         int const seqlen_q = Seqlen_traits::kUseVarSeqLen ? seqlen_traits_q.actual_seq_len : shape<0>(mainloop_params.layout_Q);
-        int const seqlen_k = Seqlen_traits::kUseVarSeqLen ? seqlen_traits_k.actual_seq_len : shape<0>(mainloop_params.layout_K);       
+        int seqlen_k = (Seqlen_traits::kUseVarSeqLen || is_page_cache) ? seqlen_traits_k.actual_seq_len : shape<0>(mainloop_params.layout_K);  
         int n_block_max = cute::ceil_div(seqlen_k, kBlockN);
         if constexpr (Is_causal) {
             n_block_max = std::min(n_block_max,
@@ -513,12 +518,7 @@ struct CollectiveMainloopFwd {
         int64_t page_stride = mainloop_params.page_stride;
         auto ptr_K = mainloop_params.ptr_K;
 
-        int n_block_max;
-        if (is_page_cache) {
-            n_block_max = get_n_block_max(mainloop_params, m_block, seqlen_traits_q, seqlen_traits_k);
-        } else {
-            n_block_max = get_n_block_max(mainloop_params, m_block, seqlen_traits_q, seqlen_traits_k);
-        }
+        int n_block_max = get_n_block_max(mainloop_params, m_block, seqlen_traits_q, seqlen_traits_k, is_page_cache);
         int n_block = n_block_max - 1;
 
 #ifdef MLA_DEBUG
@@ -641,7 +641,17 @@ struct CollectiveMainloopFwd {
                 if (is_page_cache) {
                     int64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride);
                     cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
+                    // cute::tma_descriptor_fence_acquire(tma_load_K_desc_ptr);
+#ifdef MLA_DEBUG
+                    if (thread0()) {
+                        PRINT_DEBUG_SITE();
+                        print("update tma_load_K_desc_ptr ptr_K: "); print(ptr_K); print("\n");
+                        print("update tma_load_K_desc_ptr global_offset: "); print(global_offset); print("\n");
+                        print("update tma_load_K_desc_ptr ptr_K + global_offset: "); print(ptr_K + global_offset); print("\n");
+                    }
+#endif
                 }
+                
                 pipeline_k.producer_acquire(smem_pipe_write);
                 copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
                     tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
@@ -672,6 +682,14 @@ struct CollectiveMainloopFwd {
                     if (is_page_cache) {
                         int64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride);
                         cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
+#ifdef MLA_DEBUG
+                        if (thread0()) {
+                            PRINT_DEBUG_SITE();
+                            print("update tma_load_K_desc_ptr ptr_K: "); print(ptr_K); print("\n");
+                            print("update tma_load_K_desc_ptr global_offset: "); print(global_offset); print("\n");
+                            print("update tma_load_K_desc_ptr ptr_K + global_offset: "); print(ptr_K + global_offset); print("\n");
+                        }
+#endif
                     }
                     pipeline_k.producer_acquire(smem_pipe_write);
                     copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
@@ -699,6 +717,14 @@ struct CollectiveMainloopFwd {
                     if (is_page_cache) {
                         int64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride);
                         cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
+#ifdef MLA_DEBUG
+                        if (thread0()) {
+                            PRINT_DEBUG_SITE();
+                            print("update tma_load_K_desc_ptr ptr_K: "); print(ptr_K); print("\n");
+                            print("update tma_load_K_desc_ptr global_offset: "); print(global_offset); print("\n");
+                            print("update tma_load_K_desc_ptr ptr_K + global_offset: "); print(ptr_K + global_offset); print("\n");
+                        }
+#endif
                     }
                     pipeline_k.producer_acquire(smem_pipe_write);
                     copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
