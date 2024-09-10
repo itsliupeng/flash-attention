@@ -64,6 +64,11 @@ add_definitions(-DC_DEBUG)
 # add_definitions(-DMLA_DEBUG)
 # add_definitions(-DLP_DEBUG)
 
+
+# force use sm90a for cutlass
+string(REGEX REPLACE "sm_90" "sm_90a" CMAKE_CUDA_FLAGS ${CMAKE_CUDA_FLAGS})
+string(REGEX REPLACE "compute_90" "compute_90a" CMAKE_CUDA_FLAGS ${CMAKE_CUDA_FLAGS})
+
 # Create a shared library
 set(FLASH_ATTN_CU
     # "flash_fwd_hdim128_fp16_sm90.cu"

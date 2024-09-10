@@ -18,7 +18,7 @@ cache = torch.rand(num_blocks, block_size, 1, H, dtype=torch.float16, device="cu
 cache_seqlens = torch.tensor([seqlen] * B, dtype=torch.int32, device="cuda")
 block_table = torch.randint(0, num_blocks, (B, (seqlen + block_size - 1)//block_size), dtype=torch.int32, device="cuda")
 
-for i in range(10):
+for i in range(1):
     out = flash_attn_with_kvcache(q, cache, cache, cache_seqlens=cache_seqlens, block_table=block_table, causal=False)
     # print(out)
     print(f"iter {i}")
