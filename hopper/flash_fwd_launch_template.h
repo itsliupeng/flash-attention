@@ -272,7 +272,7 @@ void run_mha_fwd_hdim256_fp8(Flash_fwd_params &params, cudaStream_t stream) {
     constexpr static int kBlockM = 128;
     // constexpr static int kBlockN = 128;
     constexpr static int kBlockN = 64;
-    constexpr static int kNWarps = 4 + kBlockM/16; // 12
+    constexpr static int kNWarps = 12;
     constexpr static int kStages = Stages_fp8;    
     BOOL_SWITCH(params.is_causal, Is_causal, [&] {
         SEQLEN_SWITCH(params.cu_seqlens_q, Seqlen_traits, [&] {

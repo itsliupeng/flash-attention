@@ -169,7 +169,7 @@ if not SKIP_CUDA_BUILD:
         "-DNDEBUG",  # Important, otherwise performance is severely impacted  
         # "-DC_DEBUG", 
         # "-DPY_DEBUG",          
-        # "-DMLA_DEBUG",          
+        "-DMLA_DEBUG",          
     ]
     include_dirs = [
         # Path(this_dir) / "fmha-pipeline",

@@ -199,20 +199,6 @@ struct CollectiveMainloopFwd {
         };
     };
 
-    // Bringing tensormaps to smem (to be done by single thread)
-    CUTLASS_DEVICE
-    void
-    tensormaps_fetch_to_smem(
-        cute::TmaDescriptor* shared_tensormap,
-        cute::TmaDescriptor* input_tensormap) const {
-        Tensor g_tensormap = make_tensor(make_gmem_ptr(input_tensormap), Int<1>{}, Int<1>{});
-        Tensor s_tensormap = make_tensor(make_smem_ptr(shared_tensormap), Int<1>{}, Int<1>{});
-        copy(recast<uint128_t>(g_tensormap), recast<uint128_t>(s_tensormap));
-
-        cp_async_fence();
-        cp_async_wait<0>();
-    }
-
     CUTLASS_DEVICE cute::TmaDescriptor*
     load_init(Params const& params, int32_t const sm_idx) const {
         cute::TmaDescriptor* gmem_tensormaps = reinterpret_cast<cute::TmaDescriptor*>(params.tensormaps);
@@ -404,19 +390,6 @@ struct CollectiveMainloopFwd {
         scheduler.broadcast_next_work(work_tile_info);
     }
 
-    // def update_tma_desc(tma_load_K_desc_ptr, ptr_K, block_table, n_block, kBlockN, page_size, page_stride) {
-    //     int lane_predicate = cute::elect_one_sync();
-    //     int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
-
-    //     cute::tma_descriptor_fence_acquire(tma_load_K_desc_ptr)
-    //     if (warp_idx_in_warpgroup == 0 && lane_predicate) {
-    //         int64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride);
-    //         cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
-    //     }
-    //     __syncwarp();
-    //     cute::tma_descriptor_fence_release(tma_load_K_desc_ptr);
-    // }
-
     template <typename Scheduler, typename SharedStorage>
     CUTLASS_DEVICE void
     load_fp8(Params const& mainloop_params,
@@ -519,13 +492,13 @@ struct CollectiveMainloopFwd {
         auto ptr_K = mainloop_params.ptr_K;
 
         int n_block_max = get_n_block_max(mainloop_params, m_block, seqlen_traits_q, seqlen_traits_k, is_page_cache);
+        // int n_block_max = 2;
         int n_block = n_block_max - 1;
 
 #ifdef MLA_DEBUG
         if (thread0()) {
             print("tma_load_K_desc_ptr: "); print(tma_load_K_desc_ptr); print("\n");
             print("tma_load_K_page_ptr: "); print(tma_load_K_page_ptr); print("\n");
-            print("n_block_max: "); print(n_block_max); print("\n");
             print("sQ: "); print(sQ); print("\n");
             print("sV: "); print(sV); print("\n");
             print("sV_divide: "); print(sV_divide); print("\n");
@@ -557,20 +530,7 @@ struct CollectiveMainloopFwd {
             copy(mainloop_params.tma_load_Q.with(reinterpret_cast<cutlass::arch::ClusterTransactionBarrier::ValueType&>(shared_storage.barrier_Q), 0 /*mcast_mask*/), tQgQ, tQsQ); 
         }
 
-        // if (is_page_cache) {
-        //     update_tma_desc(tma_load_K_desc_ptr, mainloop_params.ptr_K, block_table, n_block, kBlockN, page_size, page_stride)
-        // }
-
-        // if (is_page_cache) {
-        //     __syncwarp();
-        //     cute::tma_descriptor_cp_fence_release(tma_load_K_desc_ptr, smem_k_tensormap);
-        // }
-
         shared_storage.barrier_O.wait((work_idx + 1) % 2);
-
-        // if (is_page_cache) {
-        //     cute::tma_descriptor_fence_acquire(tma_load_K_desc_ptr);
-        // }
 
         if constexpr(Is_causal) {
             if (warp_idx_in_warpgroup == 0 && lane_predicate) {
@@ -646,6 +606,10 @@ struct CollectiveMainloopFwd {
 #ifdef MLA_DEBUG
                     if (thread0()) {
                         PRINT_DEBUG_SITE();
+                        print("update tma_load_K_desc_ptr n_block: "); print(n_block); print("\n");
+                        print("update tma_load_K_desc_ptr kBlockN: "); print(kBlockN); print("\n");
+                        print("update tma_load_K_desc_ptr page_size: "); print(page_size); print("\n");
+                        print("update tma_load_K_desc_ptr page_stride: "); print(page_stride); print("\n");
                         print("update tma_load_K_desc_ptr ptr_K: "); print(ptr_K); print("\n");
                         print("update tma_load_K_desc_ptr global_offset: "); print(global_offset); print("\n");
                         print("update tma_load_K_desc_ptr ptr_K + global_offset: "); print(ptr_K + global_offset); print("\n");
@@ -655,10 +619,7 @@ struct CollectiveMainloopFwd {
                 
                 pipeline_k.producer_acquire(smem_pipe_write);
                 copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                    tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
-                // pipeline_v.producer_acquire(smem_pipe_write);
-                // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                //     tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));        
+                    tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));     
             }
             // // With fp8 kernel, smem_o is in union with smem_v_out,
             // // so could use NamedBarrier instead of ClusterBarrier.
@@ -688,6 +649,7 @@ struct CollectiveMainloopFwd {
 #ifdef MLA_DEBUG
                         if (thread0()) {
                             PRINT_DEBUG_SITE();
+                            print("update tma_load_K_desc_ptr n_block: "); print(n_block); print("\n");
                             print("update tma_load_K_desc_ptr ptr_K: "); print(ptr_K); print("\n");
                             print("update tma_load_K_desc_ptr global_offset: "); print(global_offset); print("\n");
                             print("update tma_load_K_desc_ptr ptr_K + global_offset: "); print(ptr_K + global_offset); print("\n");
@@ -696,10 +658,7 @@ struct CollectiveMainloopFwd {
                     }
                     pipeline_k.producer_acquire(smem_pipe_write);
                     copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                        tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
-                    // pipeline_v.producer_acquire(smem_pipe_write);
-                    // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                    //     tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));                
+                        tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));             
                 }
                 
                 pipeline_v.consumer_wait(smem_pipe_read);
@@ -725,6 +684,7 @@ struct CollectiveMainloopFwd {
 #ifdef MLA_DEBUG
                         if (thread0()) {
                             PRINT_DEBUG_SITE();
+                            print("update tma_load_K_desc_ptr n_block: "); print(n_block); print("\n");
                             print("update tma_load_K_desc_ptr ptr_K: "); print(ptr_K); print("\n");
                             print("update tma_load_K_desc_ptr global_offset: "); print(global_offset); print("\n");
                             print("update tma_load_K_desc_ptr ptr_K + global_offset: "); print(ptr_K + global_offset); print("\n");
@@ -733,10 +693,7 @@ struct CollectiveMainloopFwd {
                     }
                     pipeline_k.producer_acquire(smem_pipe_write);
                     copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                        tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));
-                    // pipeline_v.producer_acquire(smem_pipe_write);
-                    // copy(mainloop_params.tma_load_V.with(*pipeline_v.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
-                    //     tVgV(_, n_block), tVsV(_, smem_pipe_write.index()));                                
+                        tKgK(_, n_block), tKsK(_, smem_pipe_write.index()));                              
                 }
                 
                 pipeline_v.consumer_wait(smem_pipe_read);
