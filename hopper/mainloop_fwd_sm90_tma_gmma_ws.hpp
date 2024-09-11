@@ -411,7 +411,8 @@ struct CollectiveMainloopFwd {
          cute::tuple<int32_t, int32_t, int32_t> block_coord,
          int work_idx,
          const Seqlen_traits& seqlen_traits_q,
-         const Seqlen_traits& seqlen_traits_k         
+         const Seqlen_traits& seqlen_traits_k,
+         int n_block_max      
          ) {
         static constexpr int kBlockN = get<1>(TileShape_MNK{});
 
@@ -496,7 +497,7 @@ struct CollectiveMainloopFwd {
         int64_t row_stride = mainloop_params.row_stride;
         auto ptr_K = mainloop_params.ptr_K;
 
-        int n_block_max = get_n_block_max(mainloop_params, m_block, seqlen_traits_q, seqlen_traits_k, is_page_cache);
+        // int n_block_max = get_n_block_max(mainloop_params, m_block, seqlen_traits_q, seqlen_traits_k, is_page_cache);
         // int n_block_max = 2;
         int n_block = n_block_max - 1;
 
@@ -681,7 +682,7 @@ struct CollectiveMainloopFwd {
             }
 
             // CUTLASS_PRAGMA_NO_UNROLL
-            // #pragma unroll 2        
+            #pragma unroll 2        
             for (; n_block >= 0; --n_block) {
                 cute::tma_descriptor_fence_release();
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
@@ -1020,6 +1021,13 @@ struct CollectiveMainloopFwd {
             }        
         }
 
+
+#ifdef MLA_DEBUG
+        if (thread0()) {
+            PRINT_DEBUG_SITE();
+            print("n_block_max in mma_fp8: "); print(n_block_count); print("\n");
+        }
+#endif
         consumer_wait(pipeline_k, smem_pipe_read);                        
         warp_scheduler_barrier_sync();
         flash::gemm</*zero_init=*/true, /*wg_wait=*/-1>(tiled_mma0, tSrQ, tSrK(_, _, _, smem_pipe_read.index()), tSrS);

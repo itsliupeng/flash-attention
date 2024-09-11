@@ -5,13 +5,13 @@ from flash_attn_interface import flash_attn_func, flash_attn_varlen_func, flash_
 # S = 128
 N = 128
 # H = 256
-B, H, S = 132 * 2, 576, 128
+B, H, S = 132, 576, 128
 
-num_blocks = 8
+num_blocks = 1024
 # must be 64, consistent with block_N in smem.
 block_size = 64
 
-seqlen = 64 * 4
+seqlen = 64 * 9
 
 q = torch.rand(B, N, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
 # q = torch.rand(B, 1, N, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
@@ -26,7 +26,7 @@ for i in range(1):
     # print(out)
     print(f"iter {i}")
 print(out.shape)
-torch.cuda.synchronize()
+# torch.cuda.synchronize()
 print(q.shape)
 print(cache.shape)
 print(block_table.shape)

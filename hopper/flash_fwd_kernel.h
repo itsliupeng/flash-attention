@@ -286,6 +286,8 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
         __syncthreads();
     }
 
+    bool is_page_cache = mainloop_params.tensormaps != nullptr;
+
     static_assert(Ktraits::kNWarps == 12 || Ktraits::kNWarps == 16);
     if (warp_group_idx == 0) {  // Producer
         cutlass::arch::warpgroup_reg_dealloc<Ktraits::kNWarps == 12 ? 40 : 32>();
@@ -323,9 +325,12 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
                     seqlen_traits_k.init(bidb);
                 }
             }
-            // todo: change to use block_info#actual_seq_k when using kvcache. oob whill be 0 thanks to TMA
+
             int n_block_max = collective_mainloop.get_n_block_max(
-                mainloop_params, m_block, seqlen_traits_q, seqlen_traits_k);
+                mainloop_params, m_block, seqlen_traits_q, seqlen_traits_k, is_page_cache);
+            // // todo: change to use block_info#actual_seq_k when using kvcache. oob whill be 0 thanks to TMA
+            // int n_block_max = collective_mainloop.get_n_block_max(
+            //     mainloop_params, m_block, seqlen_traits_q, seqlen_traits_k);
             if constexpr(Is_causal) {
                 if(n_block_max <= 0) {
                     scheduler.prefetch_next_work(scheduler_params, work_tile_info);
@@ -341,7 +346,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
                 mainloop_params, tma_load_K_page_ptr, current_block_table, pipeline_k, pipeline_k, pipeline_vt,
                 smem_pipe_write, smem_pipe_read, shared_storage,
                 scheduler, scheduler_params, work_tile_info, block_coord, work_idx,
-                seqlen_traits_q, seqlen_traits_k);
+                seqlen_traits_q, seqlen_traits_k, n_block_max);
             ++work_idx;
             // don't need to sync producer warpgroup here
             // if constexpr (Is_causal) {
@@ -384,6 +389,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
 //     }
 // #endif
 
+
             auto block_coord = work_tile_info.get_block_coord(scheduler_params);
             auto [m_block, bidh, bidb] = block_coord;
 
@@ -394,15 +400,22 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
                     continue;
                 }
             }
+
+            if (mainloop_params.tensormaps != nullptr) {
+                // update seqlen when using page cache 
+                seqlen_traits_k.init(bidb);
+            }
+
             int n_block_max = collective_mainloop.get_n_block_max(
-                mainloop_params, m_block, seqlen_traits_q, seqlen_traits_k);
+                mainloop_params, m_block, seqlen_traits_q, seqlen_traits_k, is_page_cache);
+
             if constexpr(Is_causal) {
                 if(n_block_max <= 0) {  // We exit early and write 0 to gO and -inf to gLSE.
                     collective_epilogue.store_zero(epilogue_params, shared_storage, threadIdx.x - NumCopyThreads, block_coord, seqlen_traits_q);
                     continue;
                 }
             }
-            
+
             collective_mainloop.mma_fp8<Delay_V_release>(
                 mainloop_params, pipeline_k, pipeline_vt, smem_pipe_read, smem_pipe_release,
                 tOrO, softmax, n_block_max,

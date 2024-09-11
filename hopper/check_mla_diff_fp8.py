@@ -33,7 +33,7 @@ print(f"is_causal: {is_causal}")
 
 print(">>>>> MHA")
 # for S in [128, 512, 1024]:
-for S in [128]:
+for S in [128, 256]:
 # for S in [2048, 4096, 8192]:
     for H in [256]:
     # for H in [512, 576]:
