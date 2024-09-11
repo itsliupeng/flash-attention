@@ -7,15 +7,21 @@ N = 128
 # H = 256
 B, H, S = 132, 576, 128
 
-num_blocks = 32
+# num_blocks = 32
+# num_blocks = 128
+num_blocks = 128
 # must be 64, consistent with block_N in smem.
 block_size = 64
 
-seqlen = 64 * 9
+seqlen = 64 * 21
 
 q = torch.rand(B, N, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
 # q = torch.rand(B, 1, N, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
-cache = torch.rand(num_blocks, block_size, 1, H, dtype=torch.float16).to(torch.float8_e4m3fn).cuda().contiguous()
+# cache = torch.rand(num_blocks * block_size * 1 * H, dtype=torch.float16).to(torch.float8_e4m3fn).cuda().contiguous()
+cache = torch.empty(num_blocks * block_size * 1 * H, dtype=torch.float8_e4m3fn, device="cuda").contiguous()
+cache = cache.view(num_blocks, block_size, 1, H)
+print(f"cache size: {(num_blocks * block_size * H) / (1024**3)} GB")
+
 cache_seqlens = torch.tensor([seqlen] * B, dtype=torch.int32, device="cuda")
 block_table = torch.randint(1, num_blocks, (B, (seqlen + block_size - 1)//block_size), dtype=torch.int32, device="cuda")
 
@@ -25,7 +31,7 @@ assert(cache_seqlens.is_contiguous())
 assert(block_table.is_contiguous())
 
 torch.cuda.synchronize()
-# print(block_table)
+print(block_table)
 
 with torch.no_grad():
     for i in range(1):
@@ -37,7 +43,7 @@ with torch.no_grad():
     print(q.shape)
     print(cache.shape)
     print(block_table.shape)
-    # print(block_table)
+    print(block_table)
 
 
 
