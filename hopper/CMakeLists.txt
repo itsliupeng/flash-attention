@@ -65,33 +65,33 @@ add_definitions(-DC_DEBUG)
 # add_definitions(-DLP_DEBUG)
 
 
-# force use sm90a for cutlass
-string(REGEX REPLACE "sm_90" "sm_90a" CMAKE_CUDA_FLAGS ${CMAKE_CUDA_FLAGS})
-string(REGEX REPLACE "compute_90" "compute_90a" CMAKE_CUDA_FLAGS ${CMAKE_CUDA_FLAGS})
+# # force use sm90a for cutlass
+# string(REGEX REPLACE "sm_90" "sm_90a" CMAKE_CUDA_FLAGS ${CMAKE_CUDA_FLAGS})
+# string(REGEX REPLACE "compute_90" "compute_90a" CMAKE_CUDA_FLAGS ${CMAKE_CUDA_FLAGS})
 
-# # Create a shared library
-# set(FLASH_ATTN_CU
-#     # "flash_fwd_hdim128_fp16_sm90.cu"
-#     # "flash_fwd_hdim128_bf16_sm90.cu"
-#     # "flash_fwd_hdim128_e4m3_sm90.cu"
-#     # "flash_fwd_hdim256_fp16_sm90.cu"
-#     # "flash_fwd_hdim256_bf16_sm90.cu"
-#     # "flash_fwd_hdim256_e4m3_sm90.cu"
-#     # "flash_fwd_hdim512_e4m3_sm90.cu"
-#     "flash_fwd_hdim576_e4m3_sm90.cu"
-#     )
+# Create a shared library
+set(FLASH_ATTN_CU
+    # "flash_fwd_hdim128_fp16_sm90.cu"
+    # "flash_fwd_hdim128_bf16_sm90.cu"
+    # "flash_fwd_hdim128_e4m3_sm90.cu"
+    # "flash_fwd_hdim256_fp16_sm90.cu"
+    # "flash_fwd_hdim256_bf16_sm90.cu"
+    # "flash_fwd_hdim256_e4m3_sm90.cu"
+    # "flash_fwd_hdim512_e4m3_sm90.cu"
+    "flash_fwd_hdim576_e4m3_sm90.cu"
+    )
 
-# add_library(vllm_flash_attn_2_cuda SHARED
-#     "flash_api.cpp"
-#     ${FLASH_ATTN_CU})
+add_library(vllm_flash_attn_2_cuda SHARED
+    "flash_api.cpp"
+    ${FLASH_ATTN_CU})
 
-# target_link_libraries(vllm_flash_attn_2_cuda PUBLIC ${TORCH_LIBRARIES} ${Python3_LIBRARIES})
-# set_target_properties(vllm_flash_attn_2_cuda PROPERTIES CUDA_ARCHITECTURES "90a")
+target_link_libraries(vllm_flash_attn_2_cuda PUBLIC ${TORCH_LIBRARIES} ${Python3_LIBRARIES})
+set_target_properties(vllm_flash_attn_2_cuda PROPERTIES CUDA_ARCHITECTURES "90a")
 
-# # Executable
-# add_executable(main main.cpp)
-# target_link_libraries(main PUBLIC vllm_flash_attn_2_cuda)
+# Executable
+add_executable(main main.cpp)
+target_link_libraries(main PUBLIC vllm_flash_attn_2_cuda)
 
-add_executable(check_tensor check_tensor.cpp)
-target_link_libraries(check_tensor torch)
-set_target_properties(check_tensor PROPERTIES CUDA_ARCHITECTURES "90a")
+# add_executable(check_tensor check_tensor.cpp)
+# target_link_libraries(check_tensor torch)
+# set_target_properties(check_tensor PROPERTIES CUDA_ARCHITECTURES "90a")

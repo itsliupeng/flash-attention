@@ -57,12 +57,13 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
         // cutlass::device_memory::allocation<uint8_t> tensormaps(SizeOfCuTensorMap * multiprocessor_count);
         // params.tensormaps = tensormaps.get();
 
-        cudaMalloc((void**)&params.tensormaps, SizeOfCuTensorMap * multiprocessor_count);
+        CHECK_CUDA(cudaMalloc((void**)&params.tensormaps, SizeOfCuTensorMap * multiprocessor_count));
 
     }
 #ifdef MLA_DEBUG
     bool is_page_cache = params.tensormaps != nullptr;
     cute::print("is_page_cache ?  "); cute::print(is_page_cache ? "true" : "false"); cute::print("\n");
+    cute::print("sizeof(cute::TmaDescriptor): "); cute::print(sizeof(cute::TmaDescriptor)); cute::print("\n");
 #endif
 
     typename CollectiveMainloop::Params mainloop_params =
@@ -177,11 +178,11 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
         scheduler_params, seqlen_traits_q, seqlen_traits_k);
     CHECK_CUDA_KERNEL_LAUNCH();
 
+    // CHECK_CUDA(cudaStreamSynchronize(stream));
     // free 
     if ((params.block_table != nullptr) && (params.tensormaps != nullptr)) {
-        cudaFree(params.tensormaps);
+        cudaFreeAsync(params.tensormaps, stream);
     }
-
 }
 
 template<typename T>

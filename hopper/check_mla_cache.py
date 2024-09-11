@@ -11,7 +11,7 @@ num_blocks = 1024
 # must be 64, consistent with block_N in smem.
 block_size = 64
 
-seqlen = 64 * 9
+seqlen = 64 * 128
 
 q = torch.rand(B, N, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
 # q = torch.rand(B, 1, N, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
@@ -19,18 +19,20 @@ cache = torch.rand(num_blocks, block_size, 1, H, dtype=torch.float16, device="cu
 cache_seqlens = torch.tensor([seqlen] * B, dtype=torch.int32, device="cuda")
 block_table = torch.randint(1, num_blocks, (B, (seqlen + block_size - 1)//block_size), dtype=torch.int32, device="cuda")
 
+torch.cuda.synchronize()
 print(block_table)
 
-for i in range(1):
-    out = flash_attn_with_kvcache(q, cache, cache, cache_seqlens=cache_seqlens, block_table=block_table, causal=False)
-    # print(out)
-    print(f"iter {i}")
-print(out.shape)
-# torch.cuda.synchronize()
-print(q.shape)
-print(cache.shape)
-print(block_table.shape)
-# print(block_table)
+with torch.no_grad():
+    for i in range(1):
+        out = flash_attn_with_kvcache(q, cache, cache, cache_seqlens=cache_seqlens, block_table=block_table, causal=False)
+        # print(out)
+        print(f"iter {i}")
+    print(out.shape)
+    torch.cuda.synchronize()
+    print(q.shape)
+    print(cache.shape)
+    print(block_table.shape)
+    print(block_table)
 
 
 
