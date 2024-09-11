@@ -52,7 +52,7 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
     CHECK_CUDA(cudaDeviceGetAttribute(&multiprocessor_count, cudaDevAttrMultiProcessorCount, device));
 
     if ((params.block_table != nullptr) && (params.tensormaps == nullptr)) {
-        constexpr size_t SizeOfCuTensorMap = sizeof(cute::TmaDescriptor);
+        constexpr size_t SizeOfCuTensorMap = sizeof(cute::TmaDescriptor); // 128 BYTES
         // Allocate gmem space for input tensormaps per each SM
         // cutlass::device_memory::allocation<uint8_t> tensormaps(SizeOfCuTensorMap * multiprocessor_count);
         // params.tensormaps = tensormaps.get();

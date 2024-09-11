@@ -450,7 +450,6 @@ struct CollectiveMainloopFwd {
         
         cute::TmaDescriptor* tma_load_K_desc_ptr = const_cast<cute::TmaDescriptor*>(mainloop_params.tma_load_K.get_tma_descriptor());
         bool is_page_cache = tma_load_K_page_ptr != nullptr;
-        // bool is_page_cache = false;
         if (is_page_cache) {
             tma_load_K_desc_ptr = tma_load_K_page_ptr;
         }
@@ -503,8 +502,8 @@ struct CollectiveMainloopFwd {
 
 #ifdef MLA_DEBUG
         if (thread0()) {
-            print("tma_load_K_desc_ptr: "); print(tma_load_K_desc_ptr); print("\n");
             print("tma_load_K_page_ptr: "); print(tma_load_K_page_ptr); print("\n");
+            print("tma_load_K_desc_ptr: "); print(tma_load_K_desc_ptr); print("\n");
             print("sQ: "); print(sQ); print("\n");
             print("sV: "); print(sV); print("\n");
             print("sV_divide: "); print(sV_divide); print("\n");
@@ -607,7 +606,7 @@ struct CollectiveMainloopFwd {
             if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                 if (is_page_cache) {
                     int64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride, row_stride);
-                    // cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
+                    cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
 #ifdef MLA_DEBUG
                     if (thread0()) {
                         PRINT_DEBUG_SITE();
@@ -651,7 +650,7 @@ struct CollectiveMainloopFwd {
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     if (is_page_cache) {
                         int64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride, row_stride);
-                        // cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
+                        cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
 #ifdef MLA_DEBUG
                         if (thread0()) {
                             PRINT_DEBUG_SITE();
@@ -688,7 +687,7 @@ struct CollectiveMainloopFwd {
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     if (is_page_cache) {
                         int64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride, row_stride);
-                        // cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
+                        cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
 #ifdef MLA_DEBUG
                         if (thread0()) {
                             PRINT_DEBUG_SITE();

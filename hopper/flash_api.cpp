@@ -510,6 +510,9 @@ mla_kvcache_fwd(at::Tensor &q,   // batch_size x 1 x num_heads x head_size
     CHECK_DEVICE(q); CHECK_DEVICE(cache);
     TORCH_CHECK(q.stride(-1) == 1, "Input tensor must have contiguous last dimension");
     TORCH_CHECK(cache.stride(-1) == 1, "Input tensor must have contiguous last dimension");
+    CHECK_CONTIGUOUS(q);
+    CHECK_CONTIGUOUS(cache);
+    CHECK_CONTIGUOUS(block_table);
 
     const auto sizes = q.sizes();
 
