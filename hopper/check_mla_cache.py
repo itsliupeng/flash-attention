@@ -9,11 +9,11 @@ B, H, S = 132, 576, 128
 
 # num_blocks = 32
 # num_blocks = 128
-num_blocks = 128
+num_blocks = 186
 # must be 64, consistent with block_N in smem.
 block_size = 64
 
-seqlen = 64 * 21
+seqlen = 64 * 2
 
 q = torch.rand(B, N, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
 # q = torch.rand(B, 1, N, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
@@ -31,7 +31,7 @@ assert(cache_seqlens.is_contiguous())
 assert(block_table.is_contiguous())
 
 torch.cuda.synchronize()
-print(block_table)
+print(block_table[0])
 
 with torch.no_grad():
     for i in range(1):
@@ -43,7 +43,7 @@ with torch.no_grad():
     print(q.shape)
     print(cache.shape)
     print(block_table.shape)
-    print(block_table)
+    print(block_table[0])
 
 
 

@@ -502,6 +502,7 @@ struct CollectiveMainloopFwd {
 
 #ifdef MLA_DEBUG
         if (thread0()) {
+            print("seqlen_traits_k: "); print(seqlen_traits_k.actual_seq_len); print("\n");
             print("tma_load_K_page_ptr: "); print(tma_load_K_page_ptr); print("\n");
             print("tma_load_K_desc_ptr: "); print(tma_load_K_desc_ptr); print("\n");
             print("sQ: "); print(sQ); print("\n");
