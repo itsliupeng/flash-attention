@@ -299,9 +299,16 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
 
         // for page attention: StaticPersistentTileScheduler using sm_count as grid_dim
         if (mainloop_params.tensormaps != nullptr) {
-            const int block_idx = ((blockIdx.z * gridDim.y) + blockIdx.y) * gridDim.x + blockIdx.x;
-            constexpr int num_SM = 132;
-            tma_load_K_page_ptr = collective_mainloop.load_init(mainloop_params, block_idx % num_SM);
+            // const int block_idx = ((blockIdx.z * gridDim.y) + blockIdx.y) * gridDim.x + blockIdx.x;
+            const int block_idx = blockIdx.x;
+            tma_load_K_page_ptr = collective_mainloop.load_init(mainloop_params, block_idx % mainloop_params.multiprocessor_count);
+
+#ifdef MLA_DEBUG
+            if (thread0()) {
+                PRINT_DEBUG_SITE();
+                cute::print("mainloop_params.multiprocessor_count: "); cute::print(mainloop_params.multiprocessor_count); cute::print("\n");
+            }
+#endif
         }
 
         int work_idx = 0;

@@ -64,6 +64,7 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
     bool is_page_cache = params.tensormaps != nullptr;
     cute::print("is_page_cache ?  "); cute::print(is_page_cache ? "true" : "false"); cute::print("\n");
     cute::print("sizeof(cute::TmaDescriptor): "); cute::print(sizeof(cute::TmaDescriptor)); cute::print("\n");
+    cute::print("multiprocessor_count: "); cute::print(multiprocessor_count); cute::print("\n");
 #endif
 
     typename CollectiveMainloop::Params mainloop_params =
@@ -89,7 +90,8 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
             params.block_table_batch_stride,
             params.page_block_size,
             params.k_batch_stride,
-            params.k_row_stride
+            params.k_row_stride,
+            multiprocessor_count
         });
 #ifdef MLA_DEBUG
 	//  layout_Q: (128,256,16,8):(4096,_1,256,524288)

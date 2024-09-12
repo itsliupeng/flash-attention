@@ -165,6 +165,7 @@ struct CollectiveMainloopFwd {
         int page_size;
         int64_t page_stride;
         int64_t row_stride;
+        int multiprocessor_count;
     };
 
     // Device side kernel params
@@ -184,6 +185,7 @@ struct CollectiveMainloopFwd {
         int page_size;
         int64_t page_stride;
         int64_t row_stride;
+        int multiprocessor_count;
 
         void print() const {
             cute::print(">>>>> in CollectiveMainloopFwd#Params\n");
@@ -198,6 +200,7 @@ struct CollectiveMainloopFwd {
             cute::print("\t page_size: "); cute::print(page_size); cute::print("\n");
             cute::print("\t page_stride: "); cute::print(page_stride); cute::print("\n");
             cute::print("\t row_stride: "); cute::print(row_stride); cute::print("\n");
+            cute::print("\t multiprocessor_count: "); cute::print(multiprocessor_count); cute::print("\n");
             cute::print("<<<<< in CollectiveMainloopFwd#Params\n");  
         };
     };
@@ -254,7 +257,8 @@ struct CollectiveMainloopFwd {
                 args.block_table_batch_stride,
                 args.page_size,
                 args.page_stride,
-                args.row_stride};
+                args.row_stride,
+                args.multiprocessor_count};
     }
 
     /// Issue Tma Descriptor Prefetch -- ideally from a single thread for best performance
