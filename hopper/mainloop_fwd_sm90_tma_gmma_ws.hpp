@@ -205,24 +205,27 @@ struct CollectiveMainloopFwd {
         };
     };
 
-    CUTLASS_DEVICE cute::TmaDescriptor*
-    load_init(Params const& params, int32_t const sm_idx) const {
-        cute::TmaDescriptor* gmem_tensormaps = reinterpret_cast<cute::TmaDescriptor*>(params.tensormaps);
-        cute::TmaDescriptor* tma_desc = &gmem_tensormaps[sm_idx];
+    // CUTLASS_DEVICE cute::TmaDescriptor*
+    // load_init(Params const& params, int32_t const sm_idx) const {
+    //     cute::TmaDescriptor* gmem_tensormaps = reinterpret_cast<cute::TmaDescriptor*>(params.tensormaps);
+    //     cute::TmaDescriptor* tma_desc = &gmem_tensormaps[sm_idx];
 
-        int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
-        // Initialize tma for loading
-        if ((warp_idx_in_warpgroup == 0) && cute::elect_one_sync()) {
-            // Bringing tensormaps from params to gmem for modification later
-            Tensor pC_tensormap = make_tensor(params.tma_load_K.get_tma_descriptor(), Int<1>{}, Int<1>{});
-            Tensor gC_tensormap = make_tensor(tma_desc, Int<1>{}, Int<1>{});
-            copy(recast<uint128_t>(pC_tensormap), recast<uint128_t>(gC_tensormap));
-            cp_async_fence();
-            cp_async_wait<0>();
-        }
-        __syncwarp();
-        return tma_desc;
-    }
+    //     int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
+    //     // Initialize tma for loading
+    //     if ((warp_idx_in_warpgroup == 0) && cute::elect_one_sync()) {
+    //         // Bringing tensormaps from params to gmem for modification later
+    //         Tensor pC_tensormap = make_tensor(params.tma_load_K.get_tma_descriptor(), Int<1>{}, Int<1>{});
+    //         Tensor gC_tensormap = make_tensor(tma_desc, Int<1>{}, Int<1>{});
+    //         copy(recast<uint128_t>(pC_tensormap), recast<uint128_t>(gC_tensormap));
+    //         cp_async_fence();
+    //         cp_async_wait<0>();
+    //     }
+    //     // __syncthreads();
+    //     cute::tma_descriptor_fence_release();
+    //     cute::tma_descriptor_fence_acquire(tma_desc); 
+
+    //     return tma_desc;
+    // }
 
     static Params
     to_underlying_arguments(Arguments const& args) {

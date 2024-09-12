@@ -301,7 +301,24 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
         if (mainloop_params.tensormaps != nullptr) {
             // const int block_idx = ((blockIdx.z * gridDim.y) + blockIdx.y) * gridDim.x + blockIdx.x;
             const int block_idx = blockIdx.x;
-            tma_load_K_page_ptr = collective_mainloop.load_init(mainloop_params, block_idx % mainloop_params.multiprocessor_count);
+            int sm_idx = block_idx % mainloop_params.multiprocessor_count;
+
+            cute::TmaDescriptor* gmem_tensormaps = reinterpret_cast<cute::TmaDescriptor*>(mainloop_params.tensormaps);
+            cute::TmaDescriptor* tma_load_K_page_ptr = &gmem_tensormaps[sm_idx];
+
+            int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
+            // Initialize tma for loading
+            if ((warp_idx_in_warpgroup == 0) && cute::elect_one_sync()) {
+                // Bringing tensormaps from params to gmem for modification later
+                Tensor pC_tensormap = make_tensor(mainloop_params.tma_load_K.get_tma_descriptor(), Int<1>{}, Int<1>{});
+                Tensor gC_tensormap = make_tensor(tma_load_K_page_ptr, Int<1>{}, Int<1>{});
+                copy(recast<uint128_t>(pC_tensormap), recast<uint128_t>(gC_tensormap));
+                cp_async_fence();
+                cp_async_wait<0>();
+            }
+            // __syncthreads();
+            cute::tma_descriptor_fence_release();
+            cute::tma_descriptor_fence_acquire(tma_load_K_page_ptr);
 
 #ifdef MLA_DEBUG
             if (thread0()) {
