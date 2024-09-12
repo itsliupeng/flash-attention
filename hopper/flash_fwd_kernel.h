@@ -277,34 +277,18 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
 
     CollectiveMainloop collective_mainloop;
     CollectiveEpilogue collective_epilogue;
-
-    // We need this to guarantee that the Pipeline init is visible to all producers and consumer blocks in the Cluster
-    if constexpr (size(ClusterShape{}) > 1) {
-        cute::cluster_arrive_relaxed();
-        cute::cluster_wait();
-    } else {
-        __syncthreads();
-    }
-
     bool is_page_cache = mainloop_params.tensormaps != nullptr;
 
-    static_assert(Ktraits::kNWarps == 12 || Ktraits::kNWarps == 16);
-    if (warp_group_idx == 0) {  // Producer
-        cutlass::arch::warpgroup_reg_dealloc<Ktraits::kNWarps == 12 ? 40 : 32>();
-        
-        PipelineState smem_pipe_write = cutlass::make_producer_start_state<MainloopPipeline>(); 
-        PipelineState smem_pipe_read, smem_pipe_release;
+    cute::TmaDescriptor* tma_load_K_page_ptr = nullptr;
 
-        cute::TmaDescriptor* tma_load_K_page_ptr = nullptr;
-
-        // for page attention: StaticPersistentTileScheduler using sm_count as grid_dim
-        if (mainloop_params.tensormaps != nullptr) {
+    // for page attention: StaticPersistentTileScheduler using sm_count as grid_dim
+    if (is_page_cache) {
             // const int block_idx = ((blockIdx.z * gridDim.y) + blockIdx.y) * gridDim.x + blockIdx.x;
             const int block_idx = blockIdx.x;
             int sm_idx = block_idx % mainloop_params.multiprocessor_count;
 
             cute::TmaDescriptor* gmem_tensormaps = reinterpret_cast<cute::TmaDescriptor*>(mainloop_params.tensormaps);
-            cute::TmaDescriptor* tma_load_K_page_ptr = &gmem_tensormaps[sm_idx];
+            tma_load_K_page_ptr = &gmem_tensormaps[sm_idx];
 
             int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
             // Initialize tma for loading
@@ -326,7 +310,23 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
                 cute::print("mainloop_params.multiprocessor_count: "); cute::print(mainloop_params.multiprocessor_count); cute::print("\n");
             }
 #endif
-        }
+    }
+
+    // We need this to guarantee that the Pipeline init is visible to all producers and consumer blocks in the Cluster
+    if constexpr (size(ClusterShape{}) > 1) {
+        cute::cluster_arrive_relaxed();
+        cute::cluster_wait();
+    } else {
+        __syncthreads();
+    }
+
+
+    static_assert(Ktraits::kNWarps == 12 || Ktraits::kNWarps == 16);
+    if (warp_group_idx == 0) {  // Producer
+        cutlass::arch::warpgroup_reg_dealloc<Ktraits::kNWarps == 12 ? 40 : 32>();
+        
+        PipelineState smem_pipe_write = cutlass::make_producer_start_state<MainloopPipeline>(); 
+        PipelineState smem_pipe_read, smem_pipe_release;
 
         int work_idx = 0;
 

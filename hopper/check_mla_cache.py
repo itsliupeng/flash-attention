@@ -4,16 +4,16 @@ from flash_attn_interface import flash_attn_func, flash_attn_varlen_func, flash_
 # B = 8
 # S = 128
 N = 128
-# B, H, S = 96, 576, 128
-B, H, S = 132, 256, 128
+B, H, S = 132, 576, 128
+# B, H, S = 132, 256, 128
 
 # num_blocks = 2
-num_blocks = 1024 * 50
+num_blocks = 1024 * 1000
 # must be 64, consistent with block_N in smem.
 block_size = 64
 
 # seqlen = 64 * 16 * 32
-seqlen = 64 * 8
+seqlen = 64 * 128
 
 q = torch.rand(B, N, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
 # q = torch.rand(B, 1, N, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
