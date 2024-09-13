@@ -46,7 +46,8 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
     Seqlen_traits seqlen_traits_k(
         params.total_k, params.seqlen_k, params.cu_seqlens_k, params.seqused_k);
 
-    int tensormap_count = params.b;
+    int tensormap_count = 132;
+    // int tensormap_count = params.b;
     if ((params.block_table != nullptr) && (params.tensormaps == nullptr)) {
         constexpr size_t SizeOfCuTensorMap = sizeof(cute::TmaDescriptor); // 128 BYTES
         // Allocate gmem space for input tensormaps per each SM

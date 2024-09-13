@@ -280,7 +280,8 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
 
     // We need this to guarantee that the Pipeline init is visible to all producers and consumer blocks in the Cluster
     if constexpr (size(ClusterShape{}) > 1) {
-        cute::cluster_arrive_relaxed();
+        //todo: diffrence with cluster_arrive ? 
+        cute::cluster_arrive_relaxed(); 
         cute::cluster_wait();
     } else {
         __syncthreads();
@@ -324,9 +325,9 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
 #endif
         }
 
-        __syncthreads();
+        __syncwarp();
         cute::tma_descriptor_fence_release();
-        cute::tma_descriptor_fence_acquire(tma_load_K_page_ptr);
+        // cute::tma_descriptor_fence_acquire(tma_load_K_page_ptr);
 
         int work_idx = 0;
 

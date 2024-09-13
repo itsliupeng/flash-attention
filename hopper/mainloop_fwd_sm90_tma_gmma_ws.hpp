@@ -629,8 +629,9 @@ struct CollectiveMainloopFwd {
 #endif
                 }
             }
+            __syncwarp();
             cute::tma_descriptor_fence_release();
-            cute::tma_descriptor_fence_acquire(tma_load_K_desc_ptr);         
+            // cute::tma_descriptor_fence_acquire(tma_load_K_desc_ptr);         
             if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                 pipeline_k.producer_acquire(smem_pipe_write);
                 copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
@@ -671,8 +672,9 @@ struct CollectiveMainloopFwd {
 #endif
                     }
                 }
+                __syncwarp();
                 cute::tma_descriptor_fence_release();
-                cute::tma_descriptor_fence_acquire(tma_load_K_desc_ptr);          
+                // cute::tma_descriptor_fence_acquire(tma_load_K_desc_ptr);          
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     pipeline_k.producer_acquire(smem_pipe_write);
                     copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
@@ -709,8 +711,9 @@ struct CollectiveMainloopFwd {
 #endif
                     }
                 }
+                __syncwarp();
                 cute::tma_descriptor_fence_release();
-                cute::tma_descriptor_fence_acquire(tma_load_K_desc_ptr);          
+                // cute::tma_descriptor_fence_acquire(tma_load_K_desc_ptr);          
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     pipeline_k.producer_acquire(smem_pipe_write);
                     copy(mainloop_params.tma_load_K.with(tma_load_K_desc_ptr, *pipeline_k.producer_get_barrier(smem_pipe_write), mcast_mask_kv),
