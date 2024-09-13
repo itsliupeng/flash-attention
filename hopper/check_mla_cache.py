@@ -4,15 +4,15 @@ from flash_attn_interface import flash_attn_func, flash_attn_varlen_func, flash_
 # B = 8
 # S = 128
 N = 128
-B, H, S = 132 * 1, 576, 128
+B, H, S = 132 * 3, 576, 128
 # B, H, S = 132, 256, 128
 
 # num_blocks = 2
-num_blocks = 1024 * 500
+num_blocks = 1024 * 100
 # must be 64, consistent with block_N in smem.
 block_size = 64
 
-seqlen = 64 * 16 * 8
+seqlen = 64 * 16 * 32
 # seqlen = 64 * 8
 
 q = torch.rand(B, N, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
@@ -45,6 +45,7 @@ with torch.no_grad():
     print(block_table.shape)
     print(block_table[0])
 
+print(f"cache size: {(num_blocks * block_size * H) / (1024**3)} GB")
 
 
 # is_causal = False
