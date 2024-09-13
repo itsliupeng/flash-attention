@@ -4,21 +4,21 @@ from flash_attn_interface import flash_attn_func, flash_attn_varlen_func, flash_
 # B = 8
 # S = 128
 N = 128
-B, H, S = 132, 576, 128
+B, H, S = 132 * 1, 576, 128
 # B, H, S = 132, 256, 128
 
 # num_blocks = 2
-num_blocks = 1024 * 1000
+num_blocks = 1024 * 500
 # must be 64, consistent with block_N in smem.
 block_size = 64
 
-seqlen = 64 * 16 * 2
+seqlen = 64 * 16 * 8
 # seqlen = 64 * 8
 
 q = torch.rand(B, N, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
 # q = torch.rand(B, 1, N, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
 # cache = torch.rand(num_blocks * block_size * 1 * H, dtype=torch.float16).to(torch.float8_e4m3fn).cuda().contiguous()
-cache = torch.empty(num_blocks * block_size * 1 * H, dtype=torch.float8_e4m3fn, device="cuda").contiguous()
+cache = torch.zeros(num_blocks * block_size * 1 * H, dtype=torch.float8_e4m3fn, device="cuda").contiguous()
 cache = cache.view(num_blocks, block_size, 1, H)
 print(f"cache size: {(num_blocks * block_size * H) / (1024**3)} GB")
 
