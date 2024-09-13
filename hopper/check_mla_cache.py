@@ -12,7 +12,7 @@ num_blocks = 1024 * 500
 # must be 64, consistent with block_N in smem.
 block_size = 64
 
-seqlen = 64 * 16 * 4
+seqlen = 64 * 16 * 1
 # seqlen = 64 * 8
 
 q = torch.rand(B, N, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)

@@ -296,39 +296,6 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
         PipelineState smem_pipe_write = cutlass::make_producer_start_state<MainloopPipeline>(); 
         PipelineState smem_pipe_read, smem_pipe_release;
 
-        cute::TmaDescriptor* tma_load_K_page_ptr = nullptr;
-
-        // for page attention: StaticPersistentTileScheduler using sm_count as grid_dim
-        if (mainloop_params.tensormaps != nullptr) {
-            // const int block_idx = ((blockIdx.z * gridDim.y) + blockIdx.y) * gridDim.x + blockIdx.x;
-            const int block_idx = blockIdx.x;
-            int sm_idx = block_idx % mainloop_params.tensormap_count;
-
-            cute::TmaDescriptor* gmem_tensormaps = reinterpret_cast<cute::TmaDescriptor*>(mainloop_params.tensormaps);
-            tma_load_K_page_ptr = &gmem_tensormaps[sm_idx];
-
-            int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
-            // Initialize tma for loading
-            if ((warp_idx_in_warpgroup == 0) && cute::elect_one_sync()) {
-                // Bringing tensormaps from params to gmem for modification later
-                Tensor pC_tensormap = make_tensor(mainloop_params.tma_load_K.get_tma_descriptor(), Int<1>{}, Int<1>{});
-                Tensor gC_tensormap = make_tensor(tma_load_K_page_ptr, Int<1>{}, Int<1>{});
-                copy(recast<uint128_t>(pC_tensormap), recast<uint128_t>(gC_tensormap));
-                cp_async_fence();
-                cp_async_wait<0>();
-            }
-#ifdef MLA_DEBUG
-            if (thread0()) {
-                PRINT_DEBUG_SITE();
-                cute::print("mainloop_params.tensormap_count: "); cute::print(mainloop_params.tensormap_count); cute::print("\n");
-            }
-#endif
-        }
-
-        __syncwarp();
-        cute::tma_descriptor_fence_release();
-        // cute::tma_descriptor_fence_acquire(tma_load_K_page_ptr);
-
         int work_idx = 0;
 
         TileScheduler scheduler(&shared_storage.tile_count_semaphore);
@@ -371,6 +338,37 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
                     continue;
                 }
             }
+
+            cute::TmaDescriptor* tma_load_K_page_ptr = nullptr;
+            // for page attention: StaticPersistentTileScheduler using sm_count as grid_dim
+            if (is_page_cache) {
+                // const int block_idx = ((blockIdx.z * gridDim.y) + blockIdx.y) * gridDim.x + blockIdx.x;
+                // const int block_idx = blockIdx.x;
+                int sm_idx = bidb % mainloop_params.tensormap_count;
+                cute::TmaDescriptor* gmem_tensormaps = reinterpret_cast<cute::TmaDescriptor*>(mainloop_params.tensormaps);
+                tma_load_K_page_ptr = &gmem_tensormaps[sm_idx];
+
+                int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
+                // Initialize tma for loading
+                if ((warp_idx_in_warpgroup == 0) && cute::elect_one_sync()) {
+                    // Bringing tensormaps from params to gmem for modification later
+                    Tensor pC_tensormap = make_tensor(mainloop_params.tma_load_K.get_tma_descriptor(), Int<1>{}, Int<1>{});
+                    Tensor gC_tensormap = make_tensor(tma_load_K_page_ptr, Int<1>{}, Int<1>{});
+                    copy(recast<uint128_t>(pC_tensormap), recast<uint128_t>(gC_tensormap));
+                    cp_async_fence();
+                    cp_async_wait<0>();
+                }
+    #ifdef MLA_DEBUG
+                if (thread0()) {
+                    PRINT_DEBUG_SITE();
+                    cute::print("mainloop_params.tensormap_count: "); cute::print(mainloop_params.tensormap_count); cute::print("\n");
+                }
+    #endif
+            }
+
+            __syncwarp();
+            cute::tma_descriptor_fence_release();
+            // cute::tma_descriptor_fence_acquire(tma_load_K_page_ptr);
 
             const int* current_block_table = mainloop_params.block_table + bidb * mainloop_params.block_table_batch_stride;
             collective_mainloop.load_fp8(
