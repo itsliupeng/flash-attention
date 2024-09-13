@@ -4,7 +4,7 @@ from flash_attn_interface import flash_attn_func, flash_attn_varlen_func, flash_
 # B = 8
 # S = 128
 N = 128
-B, H, S = 132 * 3, 576, 128
+B, H, S = 132 * 2, 576, 128
 # B, H, S = 132, 256, 128
 
 # num_blocks = 2
@@ -12,7 +12,7 @@ num_blocks = 1024 * 100
 # must be 64, consistent with block_N in smem.
 block_size = 64
 
-seqlen = 64 * 16 * 32
+seqlen = 64 * 16 * 1
 # seqlen = 64 * 8
 
 q = torch.rand(B, N, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
@@ -23,7 +23,7 @@ cache = cache.view(num_blocks, block_size, 1, H)
 print(f"cache size: {(num_blocks * block_size * H) / (1024**3)} GB")
 
 cache_seqlens = torch.tensor([seqlen] * B, dtype=torch.int32, device="cuda")
-block_table = torch.randint(1, num_blocks, (B, (seqlen + block_size - 1)//block_size), dtype=torch.int32, device="cuda")
+block_table = torch.randint(1, num_blocks-1, (B, (seqlen + block_size - 1)//block_size), dtype=torch.int32, device="cuda")
 
 assert(q.is_contiguous())
 assert(cache.is_contiguous())

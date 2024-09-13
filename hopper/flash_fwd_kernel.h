@@ -301,7 +301,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
         if (mainloop_params.tensormaps != nullptr) {
             // const int block_idx = ((blockIdx.z * gridDim.y) + blockIdx.y) * gridDim.x + blockIdx.x;
             const int block_idx = blockIdx.x;
-            int sm_idx = block_idx % mainloop_params.multiprocessor_count;
+            int sm_idx = block_idx % mainloop_params.tensormap_count;
 
             cute::TmaDescriptor* gmem_tensormaps = reinterpret_cast<cute::TmaDescriptor*>(mainloop_params.tensormaps);
             tma_load_K_page_ptr = &gmem_tensormaps[sm_idx];
@@ -316,17 +316,17 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
                 cp_async_fence();
                 cp_async_wait<0>();
             }
-            // __syncthreads();
-            cute::tma_descriptor_fence_release();
-            cute::tma_descriptor_fence_acquire(tma_load_K_page_ptr);
-
 #ifdef MLA_DEBUG
             if (thread0()) {
                 PRINT_DEBUG_SITE();
-                cute::print("mainloop_params.multiprocessor_count: "); cute::print(mainloop_params.multiprocessor_count); cute::print("\n");
+                cute::print("mainloop_params.tensormap_count: "); cute::print(mainloop_params.tensormap_count); cute::print("\n");
             }
 #endif
         }
+
+        __syncthreads();
+        cute::tma_descriptor_fence_release();
+        cute::tma_descriptor_fence_acquire(tma_load_K_page_ptr);
 
         int work_idx = 0;
 
@@ -336,6 +336,12 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
                 work_tile_info = scheduler.template get_next_work</*IsProducer=*/true>(scheduler_params, work_tile_info)) {
             auto block_coord = work_tile_info.get_block_coord(scheduler_params);
             auto [m_block, bidh, bidb] = block_coord;
+
+#ifdef MLA_DEBUG
+            if (thread0()) {
+                printf("work_idx %d, m_block %d, bidh: %d, block_coord: %d\n", work_idx, m_block, bidh, block_coord);
+            }
+#endif
 
             if constexpr(kUseVarSeqLen) {
                 seqlen_traits_q.init(bidb);

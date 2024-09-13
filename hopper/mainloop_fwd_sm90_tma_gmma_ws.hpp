@@ -165,7 +165,7 @@ struct CollectiveMainloopFwd {
         int page_size;
         int64_t page_stride;
         int64_t row_stride;
-        int multiprocessor_count;
+        int tensormap_count;
     };
 
     // Device side kernel params
@@ -185,7 +185,7 @@ struct CollectiveMainloopFwd {
         int page_size;
         int64_t page_stride;
         int64_t row_stride;
-        int multiprocessor_count;
+        int tensormap_count;
 
         void print() const {
             cute::print(">>>>> in CollectiveMainloopFwd#Params\n");
@@ -200,7 +200,7 @@ struct CollectiveMainloopFwd {
             cute::print("\t page_size: "); cute::print(page_size); cute::print("\n");
             cute::print("\t page_stride: "); cute::print(page_stride); cute::print("\n");
             cute::print("\t row_stride: "); cute::print(row_stride); cute::print("\n");
-            cute::print("\t multiprocessor_count: "); cute::print(multiprocessor_count); cute::print("\n");
+            cute::print("\t tensormap_count: "); cute::print(tensormap_count); cute::print("\n");
             cute::print("<<<<< in CollectiveMainloopFwd#Params\n");  
         };
     };
@@ -261,7 +261,7 @@ struct CollectiveMainloopFwd {
                 args.page_size,
                 args.page_stride,
                 args.row_stride,
-                args.multiprocessor_count};
+                args.tensormap_count};
     }
 
     /// Issue Tma Descriptor Prefetch -- ideally from a single thread for best performance
@@ -613,7 +613,7 @@ struct CollectiveMainloopFwd {
             
             if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                 if (is_page_cache) {
-                    uint64_t global_offset = flash::resolve_page_slice_offset(block_table, 511, kBlockN, page_size, page_stride, row_stride);
+                    uint64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride, row_stride);
                     cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
 #ifdef MLA_DEBUG
                     if (thread0()) {
@@ -658,7 +658,7 @@ struct CollectiveMainloopFwd {
                 // cute::tma_descriptor_fence_release();
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     if (is_page_cache) {
-                        uint64_t global_offset = flash::resolve_page_slice_offset(block_table, 511, kBlockN, page_size, page_stride, row_stride);
+                        uint64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride, row_stride);
                         cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
 #ifdef MLA_DEBUG
                         if (thread0()) {
@@ -696,7 +696,7 @@ struct CollectiveMainloopFwd {
                 // cute::tma_descriptor_fence_release();
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     if (is_page_cache) {
-                        uint64_t global_offset = flash::resolve_page_slice_offset(block_table, 511, kBlockN, page_size, page_stride, row_stride);
+                        uint64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride, row_stride);
                         cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
 #ifdef MLA_DEBUG
                         if (thread0()) {
