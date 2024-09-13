@@ -610,10 +610,10 @@ struct CollectiveMainloopFwd {
             ++smem_pipe_write;
             ++smem_pipe_read;
         } else {
-            cute::tma_descriptor_fence_release();
+            
             if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                 if (is_page_cache) {
-                    int64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride, row_stride);
+                    uint64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride, row_stride);
                     cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
 #ifdef MLA_DEBUG
                     if (thread0()) {
@@ -629,6 +629,7 @@ struct CollectiveMainloopFwd {
 #endif
                 }
             }
+            cute::tma_descriptor_fence_release();
             cute::tma_descriptor_fence_acquire(tma_load_K_desc_ptr);         
             if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                 pipeline_k.producer_acquire(smem_pipe_write);
@@ -654,10 +655,10 @@ struct CollectiveMainloopFwd {
             constexpr int extra_iterations = kStages - 1;
             CUTLASS_PRAGMA_UNROLL
             for (int iter = 0; iter < extra_iterations && n_block >= 0; ++iter) {
-                cute::tma_descriptor_fence_release();
+                // cute::tma_descriptor_fence_release();
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     if (is_page_cache) {
-                        int64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride, row_stride);
+                        uint64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride, row_stride);
                         cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
 #ifdef MLA_DEBUG
                         if (thread0()) {
@@ -670,6 +671,7 @@ struct CollectiveMainloopFwd {
 #endif
                     }
                 }
+                cute::tma_descriptor_fence_release();
                 cute::tma_descriptor_fence_acquire(tma_load_K_desc_ptr);          
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     pipeline_k.producer_acquire(smem_pipe_write);
@@ -691,10 +693,10 @@ struct CollectiveMainloopFwd {
             // CUTLASS_PRAGMA_NO_UNROLL
             #pragma unroll 2        
             for (; n_block >= 0; --n_block) {
-                cute::tma_descriptor_fence_release();
+                // cute::tma_descriptor_fence_release();
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     if (is_page_cache) {
-                        int64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride, row_stride);
+                        uint64_t global_offset = flash::resolve_page_slice_offset(block_table, n_block, kBlockN, page_size, page_stride, row_stride);
                         cute::tma_descriptor_replace_addr_in_global_mem(tma_load_K_desc_ptr, ptr_K + global_offset);
 #ifdef MLA_DEBUG
                         if (thread0()) {
@@ -707,6 +709,7 @@ struct CollectiveMainloopFwd {
 #endif
                     }
                 }
+                cute::tma_descriptor_fence_release();
                 cute::tma_descriptor_fence_acquire(tma_load_K_desc_ptr);          
                 if (warp_idx_in_warpgroup == 0 && lane_predicate) {
                     pipeline_k.producer_acquire(smem_pipe_write);

@@ -304,7 +304,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
             int sm_idx = block_idx % mainloop_params.multiprocessor_count;
 
             cute::TmaDescriptor* gmem_tensormaps = reinterpret_cast<cute::TmaDescriptor*>(mainloop_params.tensormaps);
-            cute::TmaDescriptor* tma_load_K_page_ptr = &gmem_tensormaps[sm_idx];
+            tma_load_K_page_ptr = &gmem_tensormaps[sm_idx];
 
             int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
             // Initialize tma for loading
