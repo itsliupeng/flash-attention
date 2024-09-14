@@ -46,23 +46,22 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
     Seqlen_traits seqlen_traits_k(
         params.total_k, params.seqlen_k, params.cu_seqlens_k, params.seqused_k);
 
-    int device;
-    cudaGetDevice(&device);
-    int multiprocessor_count;
-    CHECK_CUDA(cudaDeviceGetAttribute(&multiprocessor_count, cudaDevAttrMultiProcessorCount, device));
-
+    // int tensormap_count = 132;
+    int tensormap_count = params.b;
     if ((params.block_table != nullptr) && (params.tensormaps == nullptr)) {
-        constexpr size_t SizeOfCuTensorMap = sizeof(cute::TmaDescriptor);
+        constexpr size_t SizeOfCuTensorMap = sizeof(cute::TmaDescriptor); // 128 BYTES
         // Allocate gmem space for input tensormaps per each SM
-        // cutlass::device_memory::allocation<uint8_t> tensormaps(SizeOfCuTensorMap * multiprocessor_count);
+        // cutlass::device_memory::allocation<uint8_t> tensormaps(SizeOfCuTensorMap * tensormap_count);
         // params.tensormaps = tensormaps.get();
 
-        cudaMalloc((void**)&params.tensormaps, SizeOfCuTensorMap * multiprocessor_count);
+        CHECK_CUDA(cudaMalloc((void**)&params.tensormaps, SizeOfCuTensorMap * tensormap_count));
 
     }
 #ifdef MLA_DEBUG
     bool is_page_cache = params.tensormaps != nullptr;
     cute::print("is_page_cache ?  "); cute::print(is_page_cache ? "true" : "false"); cute::print("\n");
+    cute::print("sizeof(cute::TmaDescriptor): "); cute::print(sizeof(cute::TmaDescriptor)); cute::print("\n");
+    cute::print("tensormap_count: "); cute::print(tensormap_count); cute::print("\n");
 #endif
 
     typename CollectiveMainloop::Params mainloop_params =
@@ -87,7 +86,9 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
             params.block_table,
             params.block_table_batch_stride,
             params.page_block_size,
-            params.k_batch_stride
+            params.k_batch_stride,
+            params.k_row_stride,
+            tensormap_count
         });
 #ifdef MLA_DEBUG
 	//  layout_Q: (128,256,16,8):(4096,_1,256,524288)
@@ -150,37 +151,45 @@ void run_flash_fwd(Flash_fwd_params &params, cudaStream_t stream) {
     else
         kernel = (void *)flash::compute_attn_ws<Kernel_traits, Is_causal, Scheduler, Seqlen_traits>;
     int smem_size = sizeof(typename Kernel_traits::SharedStorage);
-#ifdef MLA_DEBUG
-    int smem_size_q = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_q));
-    // int smem_size_k = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_k));
-    int smem_size_v = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_v));
-    int smem_size_o = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_o));
-    printf("smem_size = %d, q = %d, k = %d, v = %d, o = %d.\n", smem_size, smem_size_q, 0, smem_size_v, smem_size_o);
-    Kernel_traits kernel_traits;
-    kernel_traits.print();
-    Seqlen_traits seqlen_traits;
-    seqlen_traits.print();
-    CollectiveEpilogue::print();
-#endif
     if (smem_size >= 48 * 1024) {
        CHECK_CUDA(cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
     }
+
+    int device;
+    cudaGetDevice(&device);
+    int multiprocessor_count;
+    CHECK_CUDA(cudaDeviceGetAttribute(&multiprocessor_count, cudaDevAttrMultiProcessorCount, device));
 
     dim3 grid_dims = Scheduler::get_grid_dim(scheduler_args, multiprocessor_count); // (132, 1, 1)
     static constexpr int ctaSize = Kernel_traits::kNWarps * 32;
     dim3 block_dims(ctaSize); // 384
     dim3 cluster_dims(size<0>(ClusterShape{}), size<1>(ClusterShape{}), size<2>(ClusterShape{}));
     cutlass::ClusterLaunchParams launch_params{grid_dims, block_dims, cluster_dims, smem_size, stream};
+#ifdef MLA_DEBUG
+    int smem_size_q = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_q));
+    // int smem_size_k = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_k));
+    int smem_size_v = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_v));
+    int smem_size_o = sizeof(decltype((typename Kernel_traits::SharedStorage{}).smem_o));
+    printf("smem_size = %d, q = %d, k = %d, v = %d, o = %d.\n", smem_size, smem_size_q, 0, smem_size_v, smem_size_o);
+    printf("num_blocks_m = %d.\n", num_blocks_m);
+    printf("grid_dims = %d - %d - %d.\n", grid_dims.x, grid_dims.y, grid_dims.z);
+    // printf("block_dims = %d - %d - %d.\n", block_dims[0], block_dims[1], block_dims[2]);
+    Kernel_traits kernel_traits;
+    kernel_traits.print();
+    // Seqlen_traits seqlen_traits;
+    seqlen_traits_k.print();
+    CollectiveEpilogue::print();
+#endif
     cutlass::launch_kernel_on_cluster(
         launch_params, kernel, mainloop_params, epilogue_params, 
         scheduler_params, seqlen_traits_q, seqlen_traits_k);
     CHECK_CUDA_KERNEL_LAUNCH();
 
+    // CHECK_CUDA(cudaStreamSynchronize(stream));
     // free 
     if ((params.block_table != nullptr) && (params.tensormaps != nullptr)) {
-        cudaFree(params.tensormaps);
+        cudaFreeAsync(params.tensormaps, stream);
     }
-
 }
 
 template<typename T>
@@ -270,8 +279,9 @@ template<typename T>
 void run_mha_fwd_hdim256_fp8(Flash_fwd_params &params, cudaStream_t stream) {
     constexpr static int Headdim = 256; 
     constexpr static int kBlockM = 128;
-    constexpr static int kBlockN = 128;
-    constexpr static int kNWarps = 4 + kBlockM/16; // 12
+    // constexpr static int kBlockN = 128;
+    constexpr static int kBlockN = 64;
+    constexpr static int kNWarps = 12;
     constexpr static int kStages = Stages_fp8;    
     BOOL_SWITCH(params.is_causal, Is_causal, [&] {
         SEQLEN_SWITCH(params.cu_seqlens_q, Seqlen_traits, [&] {

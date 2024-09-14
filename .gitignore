@@ -28,5 +28,6 @@ venv
 
 hopper/.vscode/settings.json
 hopper/cutlass
+hopper/report.txt
 
 

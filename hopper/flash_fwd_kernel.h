@@ -280,11 +280,14 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
 
     // We need this to guarantee that the Pipeline init is visible to all producers and consumer blocks in the Cluster
     if constexpr (size(ClusterShape{}) > 1) {
-        cute::cluster_arrive_relaxed();
+        //todo: diffrence with cluster_arrive ? 
+        cute::cluster_arrive_relaxed(); 
         cute::cluster_wait();
     } else {
         __syncthreads();
     }
+
+    bool is_page_cache = mainloop_params.tensormaps != nullptr;
 
     static_assert(Ktraits::kNWarps == 12 || Ktraits::kNWarps == 16);
     if (warp_group_idx == 0) {  // Producer
@@ -292,15 +295,6 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
         
         PipelineState smem_pipe_write = cutlass::make_producer_start_state<MainloopPipeline>(); 
         PipelineState smem_pipe_read, smem_pipe_release;
-
-        cute::TmaDescriptor* tma_load_K_page_ptr = nullptr;
-
-        // for page attention: StaticPersistentTileScheduler using sm_count as grid_dim
-        if (mainloop_params.tensormaps != nullptr) {
-            const int block_idx = ((blockIdx.z * gridDim.y) + blockIdx.y) * gridDim.x + blockIdx.x;
-            constexpr int num_SM = 132;
-            tma_load_K_page_ptr = collective_mainloop.load_init(mainloop_params, block_idx % num_SM);
-        }
 
         int work_idx = 0;
 
@@ -311,16 +305,30 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
             auto block_coord = work_tile_info.get_block_coord(scheduler_params);
             auto [m_block, bidh, bidb] = block_coord;
 
+#ifdef MLA_DEBUG
+            if (thread0()) {
+                printf("work_idx %d, m_block %d, bidh: %d, block_coord: %d\n", work_idx, m_block, bidh, block_coord);
+            }
+#endif
+
             if constexpr(kUseVarSeqLen) {
                 seqlen_traits_q.init(bidb);
                 seqlen_traits_k.init(bidb);
                 if (m_block * kBlockM >= seqlen_traits_q.actual_seq_len) {
                     continue;
                 }
+            } else {
+                if (mainloop_params.tensormaps != nullptr) {
+                    // update seqlen when using page cache 
+                    seqlen_traits_k.init(bidb);
+                }
             }
-            // todo: change to use block_info#actual_seq_k when using kvcache. oob whill be 0 thanks to TMA
+
             int n_block_max = collective_mainloop.get_n_block_max(
-                mainloop_params, m_block, seqlen_traits_q, seqlen_traits_k);
+                mainloop_params, m_block, seqlen_traits_q, seqlen_traits_k, is_page_cache);
+            // // todo: change to use block_info#actual_seq_k when using kvcache. oob whill be 0 thanks to TMA
+            // int n_block_max = collective_mainloop.get_n_block_max(
+            //     mainloop_params, m_block, seqlen_traits_q, seqlen_traits_k);
             if constexpr(Is_causal) {
                 if(n_block_max <= 0) {
                     scheduler.prefetch_next_work(scheduler_params, work_tile_info);
@@ -331,12 +339,43 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
                 }
             }
 
+            cute::TmaDescriptor* tma_load_K_page_ptr = nullptr;
+            // for page attention: StaticPersistentTileScheduler using sm_count as grid_dim
+            if (is_page_cache) {
+                // const int block_idx = ((blockIdx.z * gridDim.y) + blockIdx.y) * gridDim.x + blockIdx.x;
+                // const int block_idx = blockIdx.x;
+                int sm_idx = bidb % mainloop_params.tensormap_count;
+                cute::TmaDescriptor* gmem_tensormaps = reinterpret_cast<cute::TmaDescriptor*>(mainloop_params.tensormaps);
+                tma_load_K_page_ptr = &gmem_tensormaps[sm_idx];
+
+                int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
+                // Initialize tma for loading
+                if ((warp_idx_in_warpgroup == 0) && cute::elect_one_sync()) {
+                    // Bringing tensormaps from params to gmem for modification later
+                    Tensor pC_tensormap = make_tensor(mainloop_params.tma_load_K.get_tma_descriptor(), Int<1>{}, Int<1>{});
+                    Tensor gC_tensormap = make_tensor(tma_load_K_page_ptr, Int<1>{}, Int<1>{});
+                    copy(recast<uint128_t>(pC_tensormap), recast<uint128_t>(gC_tensormap));
+                    cp_async_fence();
+                    cp_async_wait<0>();
+                }
+    #ifdef MLA_DEBUG
+                if (thread0()) {
+                    PRINT_DEBUG_SITE();
+                    cute::print("mainloop_params.tensormap_count: "); cute::print(mainloop_params.tensormap_count); cute::print("\n");
+                }
+    #endif
+            }
+
+            __syncwarp();
+            cute::tma_descriptor_fence_release();
+            // cute::tma_descriptor_fence_acquire(tma_load_K_page_ptr);
+
             const int* current_block_table = mainloop_params.block_table + bidb * mainloop_params.block_table_batch_stride;
             collective_mainloop.load_fp8(
                 mainloop_params, tma_load_K_page_ptr, current_block_table, pipeline_k, pipeline_k, pipeline_vt,
                 smem_pipe_write, smem_pipe_read, shared_storage,
                 scheduler, scheduler_params, work_tile_info, block_coord, work_idx,
-                seqlen_traits_q, seqlen_traits_k);
+                seqlen_traits_q, seqlen_traits_k, n_block_max);
             ++work_idx;
             // don't need to sync producer warpgroup here
             // if constexpr (Is_causal) {
@@ -379,6 +418,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
 //     }
 // #endif
 
+
             auto block_coord = work_tile_info.get_block_coord(scheduler_params);
             auto [m_block, bidh, bidb] = block_coord;
 
@@ -389,15 +429,22 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
                     continue;
                 }
             }
+
+            if (mainloop_params.tensormaps != nullptr) {
+                // update seqlen when using page cache 
+                seqlen_traits_k.init(bidb);
+            }
+
             int n_block_max = collective_mainloop.get_n_block_max(
-                mainloop_params, m_block, seqlen_traits_q, seqlen_traits_k);
+                mainloop_params, m_block, seqlen_traits_q, seqlen_traits_k, is_page_cache);
+
             if constexpr(Is_causal) {
                 if(n_block_max <= 0) {  // We exit early and write 0 to gO and -inf to gLSE.
                     collective_epilogue.store_zero(epilogue_params, shared_storage, threadIdx.x - NumCopyThreads, block_coord, seqlen_traits_q);
                     continue;
                 }
             }
-            
+
             collective_mainloop.mma_fp8<Delay_V_release>(
                 mainloop_params, pipeline_k, pipeline_vt, smem_pipe_read, smem_pipe_release,
                 tOrO, softmax, n_block_max,

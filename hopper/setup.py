@@ -150,8 +150,9 @@ if not SKIP_CUDA_BUILD:
         "flash_fwd_hdim576_e4m3_sm90.cu",
     ]
     nvcc_flags = [
-        "-O3",
-        # "-O0",
+        # "-O3",
+        "-O0",
+        "-g",
         "-std=c++17",
         "-U__CUDA_NO_HALF_OPERATORS__",
         "-U__CUDA_NO_HALF_CONVERSIONS__",
@@ -169,7 +170,7 @@ if not SKIP_CUDA_BUILD:
         "-DNDEBUG",  # Important, otherwise performance is severely impacted  
         # "-DC_DEBUG", 
         # "-DPY_DEBUG",          
-        # "-DMLA_DEBUG",          
+        "-DMLA_DEBUG",          
     ]
     include_dirs = [
         # Path(this_dir) / "fmha-pipeline",
