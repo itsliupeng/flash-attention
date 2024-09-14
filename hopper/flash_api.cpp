@@ -153,7 +153,7 @@ void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split
     // HEADDIM_SWITCH(params.d, [&] {
     //     run_mha_fwd_<cutlass::half_t, kHeadSize>(params, stream);
     // });
-#ifdef MLA_DEBUG
+#ifdef C_DEBUG
     printf("calling fp8_kernel\n");
     // if (params.d == 128) {
     //     run_mha_fwd_<cutlass::float_e4m3_t, 128>(params, stream);
@@ -510,6 +510,9 @@ mla_kvcache_fwd(at::Tensor &q,   // batch_size x 1 x num_heads x head_size
     CHECK_DEVICE(q); CHECK_DEVICE(cache);
     TORCH_CHECK(q.stride(-1) == 1, "Input tensor must have contiguous last dimension");
     TORCH_CHECK(cache.stride(-1) == 1, "Input tensor must have contiguous last dimension");
+    CHECK_CONTIGUOUS(q);
+    CHECK_CONTIGUOUS(cache);
+    CHECK_CONTIGUOUS(block_table);
 
     const auto sizes = q.sizes();
 
@@ -542,6 +545,11 @@ mla_kvcache_fwd(at::Tensor &q,   // batch_size x 1 x num_heads x head_size
     }
 
     at::Tensor out;
+    int out_head_size = head_size_og;
+    if (head_size_og == 576) {
+        out_head_size = 512;
+    }
+    
     if (out_.has_value()) {
         out = out_.value();
         // TORCH_CHECK(out.dtype() == q_dtype, "Output must have the same dtype as inputs");
@@ -552,16 +560,12 @@ mla_kvcache_fwd(at::Tensor &q,   // batch_size x 1 x num_heads x head_size
                 "not fp8, or fp16 for fp8 input.");
         CHECK_DEVICE(out);
         TORCH_CHECK(out.stride(-1) == 1, "Output tensor must have contiguous last dimension");
-        if (head_size_og == 576) {
-            CHECK_SHAPE(out, batch_size, seqlen_q, num_heads, 512);
-        } else{
-            CHECK_SHAPE(out, batch_size, seqlen_q, num_heads, head_size_og);
-        }
+        CHECK_SHAPE(out, batch_size, seqlen_q, num_heads, head_size_og);
     } else {
         if (q_dtype == at::ScalarType::Float8_e4m3fn)
-            out = torch::empty({batch_size, seqlen_q, num_heads, head_size_og}, q.options().dtype(torch::kHalf));
+            out = torch::empty({batch_size, seqlen_q, num_heads, out_head_size}, q.options().dtype(torch::kHalf));
         else
-            out = torch::empty({batch_size, seqlen_q, num_heads, head_size_og}, q.options());
+            out = torch::empty({batch_size, seqlen_q, num_heads, out_head_size}, q.options());
     }
 
     auto round_multiple = [](int x, int m) { return (x + m - 1) / m * m; };
@@ -630,7 +634,7 @@ mla_kvcache_fwd(at::Tensor &q,   // batch_size x 1 x num_heads x head_size
 
 
 
-#ifndef MLA_DEBUG
+#ifndef C_DEBUG
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.doc() = "FlashAttention";
     m.def("fwd", &mha_fwd, "Forward pass");

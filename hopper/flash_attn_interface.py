@@ -495,6 +495,7 @@ def flash_attn_with_kvcache(
         cache_seqlens = maybe_contiguous(cache_seqlens)
     cache_batch_idx = maybe_contiguous(cache_batch_idx)
     block_table = maybe_contiguous(block_table)
+    # import ipdb; ipdb.set_trace()
     out, softmax_lse = flashattn_hopper_cuda.fwd_kvcache(
         q,
         k_cache,

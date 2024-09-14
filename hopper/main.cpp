@@ -13,7 +13,7 @@ int main(int argc, const char *argv[]) {
     int head_size = 576;
     int out_head_size = 512;
     auto options = torch::TensorOptions().device(torch::kCUDA).dtype(torch::kHalf);
-    at::Tensor q = torch::randn({batch_size, 1, num_heads, head_size}, options).to(torch::kFloat8_e4m3fn);
+    at::Tensor q = torch::randn({batch_size, num_heads, 1, head_size}, options).to(torch::kFloat8_e4m3fn);
 
     // page table
     int num_blocks = batch_size;
@@ -22,7 +22,7 @@ int main(int argc, const char *argv[]) {
 
     // at::Tensor k = torch::randn({batch_size * seqlen, num_heads_k, head_size}, options).to(torch::kFloat8_e4m3fn);
     // at::Tensor v = k;
-    at::Tensor o = torch::zeros({batch_size, 1, num_heads, out_head_size},  options);
+    at::Tensor o = torch::zeros({batch_size, num_heads, 1, out_head_size},  options);
     // std::cout << q.sizes() << " " << q.device().type() << " " << q.layout() << std::endl;
 
     // // Prepare the optional tensors for output and alibi slopes
@@ -64,8 +64,10 @@ int main(int argc, const char *argv[]) {
 
     // auto q_view = q.view({batch_size, num_heads, seqlen_q, head_size});
     std::vector<at::Tensor> result;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 10; i++) {
+        printf("calling iter %d\n", i);
         result = mla_kvcache_fwd(q, cache, seqlens, block_table, out_, 1.0f);
+        // torch::cuda::synchronize();
     }
     std::cout << result[0].sizes() << std::endl;
 

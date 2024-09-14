@@ -82,7 +82,7 @@ bs_seqlen_vals = [(bs, 512), (bs, 1024), (bs, 2048), (bs, 4224), (bs, 8448), (bs
 # bs_seqlen_vals = [(32, 512), (16, 1024), (8, 2048)]
 causal_vals = [False]
 # causal_vals = [False]
-headdim_vals = [256]
+headdim_vals = [128, 256]
 # dim = 2048
 # dim = 256
 dropout_p = 0.0
@@ -108,7 +108,8 @@ for causal in causal_vals:
             nheads = 128
             # q, k, v = [torch.randn(batch_size, seqlen, nheads, headdim, device=device, dtype=torch.float16, requires_grad=False) for _ in range(3)]
             
-            q = torch.randn(batch_size, 1, nheads, headdim, device=device, dtype=torch.float16, requires_grad=False)
+            # q = torch.randn(batch_size, 1, nheads, headdim, device=device, dtype=torch.float16, requires_grad=False)
+            q = torch.randn(batch_size, nheads, 1, headdim, device=device, dtype=torch.float16, requires_grad=False)
             k = torch.randn(batch_size, seqlen, 1, headdim, device=device, dtype=torch.float16, requires_grad=False)
             v = torch.randn(batch_size, seqlen, 1, headdim, device=device, dtype=torch.float16, requires_grad=False)
             # qkv = torch.stack([q, k, v], dim=2)

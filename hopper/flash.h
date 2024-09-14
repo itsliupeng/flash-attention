@@ -132,7 +132,7 @@ struct Flash_fwd_params : public Qkv_params {
 
     int * __restrict__ tile_count_semaphore;
     // tma_load_K for page block table
-    uint64_t * __restrict__ tensormaps;
+    void * __restrict__ tensormaps;
 };
 
 template<typename T, int Headdim> void run_mha_fwd_(Flash_fwd_params &params, cudaStream_t stream);

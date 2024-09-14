@@ -4,25 +4,50 @@ from flash_attn_interface import flash_attn_func, flash_attn_varlen_func, flash_
 # B = 8
 # S = 128
 N = 128
-# H = 256
-B, H, S = 4, 576, 128
+B, H, S = 132 * 4, 576, 128
+# B, H, S = 132, 256, 128
 
-num_blocks = B
+# num_blocks = 2
+num_blocks = 1024 * 500
+# must be 64, consistent with block_N in smem.
 block_size = 64
 
-seqlen = 128
+seqlen = 64 * 16 * 1
+# seqlen = 64 * 8
 
 q = torch.rand(B, N, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
 # q = torch.rand(B, 1, N, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
-cache = torch.rand(num_blocks, block_size, 1, H, dtype=torch.float16, device="cuda").to(torch.float8_e4m3fn)
+# cache = torch.rand(num_blocks * block_size * 1 * H, dtype=torch.float16).to(torch.float8_e4m3fn).cuda().contiguous()
+cache = torch.zeros(num_blocks * block_size * 1 * H, dtype=torch.float8_e4m3fn, device="cuda").contiguous()
+cache = cache.view(num_blocks, block_size, 1, H)
+print(f"cache size: {(num_blocks * block_size * H) / (1024**3)} GB")
+
 cache_seqlens = torch.tensor([seqlen] * B, dtype=torch.int32, device="cuda")
-block_table = torch.randint(0, num_blocks, (B, (seqlen + block_size - 1)//block_size), dtype=torch.int32, device="cuda")
+block_table = torch.randint(1, num_blocks-1, (B, (seqlen + block_size - 1)//block_size), dtype=torch.int32, device="cuda")
 
-for i in range(2):
-    out = flash_attn_with_kvcache(q, cache, cache, cache_seqlens=cache_seqlens, block_table=block_table, causal=False)
-    print(out)
+assert(q.is_contiguous())
+assert(cache.is_contiguous())
+assert(cache_seqlens.is_contiguous())
+assert(block_table.is_contiguous())
 
-print(out.shape)
+torch.cuda.synchronize()
+print(block_table[0])
+
+with torch.no_grad():
+    for i in range(1):
+        out = flash_attn_with_kvcache(q, cache, cache, cache_seqlens=cache_seqlens, block_table=block_table, causal=False)
+        # print(out)
+        print(f"iter {i}")
+        # import ipdb; ipdb.set_trace();
+    torch.cuda.synchronize()
+    print(out.shape)
+    print(q.shape)
+    print(cache.shape)
+    print(block_table.shape)
+    print(block_table[0])
+
+print(f"cache size: {(num_blocks * block_size * H) / (1024**3)} GB")
+
 
 # is_causal = False
 # print(f"is_causal: {is_causal}")
